@@ -2,7 +2,7 @@
 
 ## Overview
 
-MemoryLane is a multi-tenant, agentic AI photo library organizer built as a set of FastAPI microservices orchestrated by multi-agent AI systems (LangGraph, CrewAI, AutoGen).
+MemoryLane is a multi-tenant, agentic AI photo library organizer built as a set of FastAPI microservices orchestrated by multi-agent AI systems (LangGraph + AutoGen).
 
 ## High-Level Components
 
@@ -13,7 +13,7 @@ API Gateway (FastAPI on EKS)
     │
     ├── Ingestion Service
     ├── Search Service
-    ├── Agent Orchestrator (LangGraph + CrewAI)
+    ├── Agent Orchestrator (LangGraph + AutoGen)
     └── Admin / Eval Service
     │
 Tool Layer (CLIP, BLIP-2, RetinaFace, ArcFace, Reranker)

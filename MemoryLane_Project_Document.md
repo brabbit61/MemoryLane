@@ -42,7 +42,7 @@
 
 **The product story:** "I have 30,000 photos. I can't find anything. I never look at them. MemoryLane fixes that."
 
-**The engineering story:** A production-grade, multi-tenant, multi-agent system that exercises the bulk of the target JD — CrewAI + LangGraph + AutoGen orchestration with deep ReAct, planning, and reflection patterns; persistent memory; hybrid RAG over a vector DB; DPO from real human preferences for ranking; FastAPI microservices on AWS with EKS/Terraform/CI-CD; LangSmith observability; prompt-injection guardrails; and a custom evaluation framework. Fine-tuning (PEFT/SFT) is deliberately out of scope — see §9 for the rationale and compensating depth.
+**The engineering story:** A production-grade, multi-tenant, multi-agent system that exercises the bulk of the target JD — LangGraph + AutoGen orchestration with deep ReAct, planning, and reflection patterns; persistent memory; hybrid RAG over a vector DB; DPO from real human preferences for ranking; FastAPI microservices on AWS with EKS/Terraform/CI-CD; LangSmith observability; prompt-injection guardrails; and a custom evaluation framework. Fine-tuning (PEFT/SFT) is deliberately out of scope — see §9 for the rationale and compensating depth.
 
 This is the project's **dual purpose**: ship something genuinely useful for personal photo organization, and produce a portfolio artifact that maps cleanly to every requirement of a Senior ML Engineer (Agentic AI) role.
 
@@ -220,7 +220,7 @@ Lands on the demo URL via portfolio link. Has 5 minutes.
 │  Ingestion│ │ Search   │  │ Agent     │ │ Admin / Eval  │
 │  Service  │ │ Service  │  │ Orchestr. │ │ Service       │
 │ (FastAPI) │ │ (FastAPI)│  │ (LangGraph│ │ (FastAPI)     │
-│           │ │          │  │ + CrewAI) │ │               │
+│           │ │          │  │ + AutoGen)│ │               │
 └────┬──────┘ └────┬─────┘  └────┬──────┘ └───────────────┘
      │             │              │
      │       ┌─────▼──────────────▼──────┐
@@ -278,11 +278,10 @@ Lands on the demo URL via portfolio link. Has 5 minutes.
 
 ### Framework Allocation
 
-The JD names CrewAI, LangGraph, and AutoGen. Each is used where it's strongest:
+The JD names CrewAI, LangGraph, and AutoGen. Two are used where each is strongest; CrewAI was evaluated and replaced — see ADR-003:
 
-- **LangGraph** = primary orchestrator. Stateful workflows, checkpointing, branching logic. Used for the Search Agent and Ingestion Pipeline coordination.
-- **CrewAI** = hierarchical crews with defined roles. Used for the Album Generation Crew (Curator → Theme Detector → Photo Selector → Captioner).
-- **AutoGen** = conversational multi-agent. Used for the Conversational Search Agent that handles multi-turn refinement with internal "user-proxy ↔ assistant" dialog.
+- **LangGraph** = primary orchestrator for all stateful agents (A1–A4, A6). Stateful workflows, checkpointing, native LangSmith tracing, HITL interrupts at any node boundary. Also used for the Album Generation supervisor graph (A3) via the multi-agent supervisor pattern, replacing the originally planned CrewAI crew (see ADR-003).
+- **AutoGen** = conversational multi-agent. Used for the Conversational Search Agent (A5) that handles multi-turn refinement with internal "user-proxy ↔ assistant" dialog.
 
 ### Agent Catalog
 
@@ -300,13 +299,17 @@ The JD names CrewAI, LangGraph, and AutoGen. Each is used where it's strongest:
 - **Algorithm:** Multi-signal DBSCAN with weights tuned per user.
 - **Self-correction:** Reviews cluster confidence; merges or splits clusters when confidence < threshold.
 
-#### A3. Album Generation Crew (CrewAI)
+#### A3. Album Generation Graph (LangGraph multi-agent supervisor)
 
-A hierarchical crew:
-- **Curator (Manager Agent):** Decides which events deserve albums.
-- **Theme Detector:** Reads captions, identifies themes ("beach vacation", "family dinner").
-- **Photo Selector:** Picks representative photos using reranker + DPO model.
-- **Cover Designer:** Selects cover photo and generates album title.
+A `StateGraph` with a supervisor node that routes `Command` objects to four worker nodes.
+Originally designed as a CrewAI hierarchical crew; replaced by LangGraph's supervisor pattern for unified observability and checkpointing (see ADR-003).
+
+- **curator:** Decides which events deserve albums.
+- **theme_detector:** Reads captions, identifies themes ("beach vacation", "family dinner").
+- **photo_selector:** Picks representative photos using reranker + DPO model.
+- **cover_designer:** Selects cover photo and generates album title.
+
+Checkpointed via Postgres; HITL interrupts can pause at any node boundary for user confirmation before album creation.
 
 #### A4. Search Agent (LangGraph)
 
@@ -387,7 +390,7 @@ A hierarchical crew:
      │
      ▼
 [Stage 5: Album Generation]
-  • CrewAI album crew runs on detected events
+  • LangGraph album generation graph runs on detected events
   • Albums stored in Postgres
      │
      ▼
@@ -665,7 +668,7 @@ All queries always filter by `tenant_id` and `user_id` first (enforced at the OR
 1. **api-gateway** — public-facing FastAPI; auth, rate limiting, request routing
 2. **ingestion-svc** — handles uploads, Google Photos sync
 3. **search-svc** — search agent orchestration (LangGraph)
-4. **agent-svc** — generic agent orchestrator (CrewAI, AutoGen)
+4. **agent-svc** — generic agent orchestrator (LangGraph, AutoGen)
 5. **enrichment-worker** — async photo enrichment (Celery)
 6. **clustering-worker** — face/event/duplicate clustering (Celery)
 7. **eval-svc** — runs eval suites on demand and on schedule
@@ -752,7 +755,7 @@ GET    /v1/admin/eval/runs                → eval results dashboard
 
 ### LangSmith Usage
 
-- Every agent call traced (LangGraph + CrewAI + AutoGen all integrated)
+- Every agent call traced (LangGraph + AutoGen all integrated; CrewAI replaced — see ADR-003)
 - Prompts versioned via LangSmith Prompts
 - Eval datasets stored and run via LangSmith Evaluators
 - A/B tests of prompt versions tracked
@@ -970,7 +973,7 @@ Phases are logical dependencies, not timelines.
 ### Phase 4 — Albums, Captions, BLIP
 
 - BLIP-2 captioner integrated
-- CrewAI Album Generation Crew
+- LangGraph Album Generation Graph (supervisor pattern, see ADR-003)
 - Auto-album surfaced in UI
 - Cover-picker UI (collects DPO data)
 
@@ -1085,9 +1088,9 @@ memorylane/
 
 | JD Requirement | Where Covered |
 |---|---|
-| Multi-agent systems & orchestration | §7 (LangGraph + CrewAI + AutoGen) |
-| Hierarchical & collaborative agents | §7 (Album Generation Crew) |
-| CrewAI / LangGraph / AutoGen | §7 (each used distinctly) |
+| Multi-agent systems & orchestration | §7 (LangGraph + AutoGen); CrewAI evaluated and replaced — see ADR-003 |
+| Hierarchical & collaborative agents | §7 (Album Generation Graph — LangGraph supervisor pattern) |
+| LangGraph / AutoGen | §7 (each used distinctly); CrewAI replaced by LangGraph supervisor (ADR-003) |
 | Tool integration | §7, §8 (tool layer) |
 | ReAct & self-correction | §7 (per-agent ReAct loops) |
 | Memory & state management | §7 (memory architecture table) |

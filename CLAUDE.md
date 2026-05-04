@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-MemoryLane is an agentic AI photo library organizer — a multi-tenant SaaS built with FastAPI microservices, multi-agent AI (LangGraph, CrewAI, AutoGen), and deployed on AWS (EKS/Terraform).
+MemoryLane is an agentic AI photo library organizer — a multi-tenant SaaS built with FastAPI microservices, multi-agent AI (LangGraph + AutoGen), and deployed on AWS (EKS/Terraform).
 
 ## Repository Structure
 
