@@ -1,3 +1,5 @@
+from typing import Any
+
 import aioboto3
 
 from app.config import settings
@@ -9,7 +11,7 @@ _session = aioboto3.Session(
 )
 
 
-def _client():  # type: ignore[no-untyped-def]
+def _client() -> Any:
     return _session.client("s3", endpoint_url=settings.s3_endpoint_url)
 
 

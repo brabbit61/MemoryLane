@@ -5,19 +5,9 @@ from datetime import UTC, datetime
 import httpx
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
-from googleapiclient.discovery import build  # type: ignore[import-untyped]
+from googleapiclient.discovery import build
 
 from app.config import settings
-
-_CLIENT_CONFIG = {
-    "web": {
-        "client_id": None,  # filled at call time from settings
-        "client_secret": None,
-        "redirect_uris": [],
-        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-        "token_uri": "https://oauth2.googleapis.com/token",
-    }
-}
 
 
 def _build_flow() -> Flow:
@@ -45,7 +35,7 @@ def build_auth_url(state: str) -> str:
         state=state,
         include_granted_scopes="true",
     )
-    return auth_url
+    return str(auth_url)
 
 
 def _exchange_code_sync(code: str) -> dict[str, str | None]:
@@ -76,7 +66,7 @@ def _build_credentials(creds_dict: dict[str, str | None]) -> Credentials:
     if creds_dict.get("scope"):
         scopes = str(creds_dict["scope"]).split()
 
-    return Credentials(
+    return Credentials(  # type: ignore[no-untyped-call]
         token=creds_dict.get("access_token"),
         refresh_token=creds_dict.get("refresh_token"),
         token_uri="https://oauth2.googleapis.com/token",  # noqa: S106

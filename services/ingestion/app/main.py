@@ -12,7 +12,7 @@ from app.services.s3 import ensure_bucket_exists
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)
+    redis_client = aioredis.from_url(settings.redis_url, decode_responses=True)  # type: ignore[no-untyped-call]
     app.state.redis = redis_client
     await ensure_bucket_exists()
     yield

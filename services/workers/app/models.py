@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import BigInteger, DateTime, ForeignKey, String, Text, func
@@ -27,7 +28,7 @@ class Photo(Base):
     latitude: Mapped[float | None] = mapped_column()
     longitude: Mapped[float | None] = mapped_column()
     caption: Mapped[str | None] = mapped_column(Text)
-    exif_data: Mapped[dict | None] = mapped_column(JSONB)
+    exif_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     source: Mapped[str] = mapped_column(String(32), nullable=False, default="google_photos")
     external_id: Mapped[str | None] = mapped_column(String(512))

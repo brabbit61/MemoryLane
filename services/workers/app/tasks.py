@@ -3,6 +3,7 @@ import io
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 import boto3
 from PIL import Image
@@ -17,7 +18,7 @@ from app.worker import celery_app
 logger = logging.getLogger(__name__)
 
 
-def _s3_client():  # type: ignore[no-untyped-def]
+def _s3_client() -> Any:
     return boto3.client(
         "s3",
         endpoint_url=settings.s3_endpoint_url,
@@ -79,7 +80,7 @@ def _dms_to_decimal(
 def _generate_thumbnails(
     image: Image.Image,
     s3_key_base: str,
-    s3: object,
+    s3: Any,
 ) -> None:
     for size in (256, 1024):
         thumb = image.copy()
@@ -87,7 +88,7 @@ def _generate_thumbnails(
         buf = io.BytesIO()
         thumb.save(buf, format="JPEG")
         thumb_key = s3_key_base.replace("originals/", f"thumbnails/{size}/", 1)
-        s3.put_object(  # type: ignore[union-attr]
+        s3.put_object(
             Bucket=settings.s3_bucket_photos,
             Key=thumb_key,
             Body=buf.getvalue(),
@@ -142,8 +143,8 @@ def _enrich(photo_id: str) -> None:
         db.commit()
 
 
-@celery_app.task(bind=True, name="workers.tasks.enrich_photo", max_retries=3)  # type: ignore[misc]
-def enrich_photo(self, photo_id: str) -> None:  # type: ignore[no-untyped-def]
+@celery_app.task(bind=True, name="workers.tasks.enrich_photo", max_retries=3)  # type: ignore[untyped-decorator]
+def enrich_photo(self: Any, photo_id: str) -> None:
     try:
         _enrich(photo_id)
     except Exception as exc:
