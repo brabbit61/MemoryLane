@@ -60,9 +60,10 @@ async def test_sync_dispatches_enrich_per_new_photo() -> None:
     mock_db.execute = AsyncMock(side_effect=execute_results)
     mock_db.flush = AsyncMock()
     mock_db.commit = AsyncMock()
-    mock_db.add = AsyncMock()
+    # AsyncSession.add() is synchronous in real SQLAlchemy — use MagicMock, not AsyncMock.
+    mock_db.add = MagicMock()
 
-    async def _fake_add(obj: object) -> None:
+    def _fake_add(obj: object) -> None:
         if isinstance(obj, Photo):
             obj.id = created_photo.id  # type: ignore[attr-defined]
 

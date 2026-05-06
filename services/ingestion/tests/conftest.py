@@ -1,11 +1,12 @@
 import uuid
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
+from app.db import get_db
 from app.main import app
 
 
@@ -27,6 +28,24 @@ def dev_user_id() -> uuid.UUID:
 @pytest.fixture()
 def dev_tenant_id() -> uuid.UUID:
     return uuid.UUID("00000000-0000-0000-0000-000000000001")
+
+
+@pytest.fixture()
+def override_db() -> Generator[AsyncMock, None, None]:
+    """Override the get_db FastAPI dependency with a mock AsyncSession.
+
+    Yields the AsyncMock so tests can configure its behavior.
+    """
+    mock_db = AsyncMock()
+
+    async def _override() -> AsyncGenerator[AsyncMock, None]:
+        yield mock_db
+
+    app.dependency_overrides[get_db] = _override
+    try:
+        yield mock_db
+    finally:
+        app.dependency_overrides.pop(get_db, None)
 
 
 @pytest_asyncio.fixture()

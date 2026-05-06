@@ -1,5 +1,5 @@
 import uuid
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import AsyncClient
@@ -9,20 +9,14 @@ from httpx import AsyncClient
 async def test_oauth_init_returns_auth_url(
     client: AsyncClient,
     mock_redis: AsyncMock,
+    override_db: AsyncMock,
     dev_user_id: uuid.UUID,
 ) -> None:
-    mock_user = AsyncMock()
-    mock_user.scalar_one_or_none.return_value = object()
+    mock_result = AsyncMock()
+    mock_result.scalar_one_or_none = lambda: object()
+    override_db.execute = AsyncMock(return_value=mock_result)
 
-    with (
-        patch("app.routers.oauth.get_db") as mock_get_db,
-        patch("app.services.redis_state.create_state_token", return_value="test-token"),
-    ):
-        mock_db = AsyncMock()
-        mock_db.execute = AsyncMock(return_value=mock_user)
-        mock_get_db.return_value.__aenter__ = AsyncMock(return_value=mock_db)
-        mock_get_db.return_value.__aexit__ = AsyncMock(return_value=False)
-
+    with patch("app.routers.oauth.create_state_token", return_value="test-token"):
         response = await client.get(f"/oauth/google/init?user_id={dev_user_id}")
 
     assert response.status_code == 200
@@ -52,6 +46,7 @@ async def test_callback_invalid_state(
 async def test_callback_success(
     client: AsyncClient,
     mock_redis: AsyncMock,
+    override_db: AsyncMock,
     dev_user_id: uuid.UUID,
     dev_tenant_id: uuid.UUID,
 ) -> None:
@@ -62,13 +57,15 @@ async def test_callback_success(
         tenant_id=dev_tenant_id,
         email="dev@memorylane.local",
     )
-    mock_execute_result = AsyncMock()
-    mock_execute_result.scalar_one_or_none.side_effect = [mock_user_obj, None]
-
-    mock_db = AsyncMock()
-    mock_db.execute = AsyncMock(return_value=mock_execute_result)
-    mock_db.commit = AsyncMock()
-    mock_db.add = AsyncMock()
+    # First execute() returns a result whose scalar_one_or_none() yields the user;
+    # second execute() returns one whose scalar_one_or_none() yields None (no existing token).
+    user_result = MagicMock()
+    user_result.scalar_one_or_none.return_value = mock_user_obj
+    no_token_result = MagicMock()
+    no_token_result.scalar_one_or_none.return_value = None
+    override_db.execute = AsyncMock(side_effect=[user_result, no_token_result])
+    override_db.commit = AsyncMock()
+    override_db.add = MagicMock()  # add() is sync in real AsyncSession
 
     fake_token_data = {
         "access_token": "acc-token",
@@ -80,10 +77,8 @@ async def test_callback_success(
     with (
         patch("app.routers.oauth.consume_state_token", return_value=True),
         patch("app.routers.oauth.exchange_code", return_value=fake_token_data),
-        patch("app.routers.oauth.get_db") as mock_get_db,
         patch("app.routers.sync.run_google_sync") as mock_sync,
     ):
-        mock_get_db.return_value = _AsyncCtx(mock_db)
         response = await client.get(
             f"/oauth/google/callback?code=real-code&state=valid-token:{dev_user_id}"
         )
@@ -91,16 +86,3 @@ async def test_callback_success(
     assert response.status_code == 200
     assert response.json() == {"status": "connected"}
     mock_sync.assert_called_once()
-
-
-class _AsyncCtx:
-    """Minimal async context manager shim for patching get_db."""
-
-    def __init__(self, value: object) -> None:
-        self._value = value
-
-    async def __aenter__(self) -> object:
-        return self._value
-
-    async def __aexit__(self, *args: object) -> None:
-        pass
