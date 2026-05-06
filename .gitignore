@@ -219,3 +219,6 @@ __marimo__/
 
 # Claude skills
 .claude/*
+
+# Binaries
+*.0_x5
