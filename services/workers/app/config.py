@@ -2,9 +2,7 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    database_url: str = (
-        "postgresql+psycopg2://memorylane:memorylane@localhost:5432/memorylane"
-    )
+    database_url: str = "postgresql+psycopg2://memorylane:memorylane@localhost:5432/memorylane"
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_backend_url: str = "redis://localhost:6379/1"
 

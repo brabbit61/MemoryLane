@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncGenerator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 from google.oauth2.credentials import Credentials
@@ -70,7 +70,7 @@ def _build_credentials(creds_dict: dict[str, str | None]) -> Credentials:
     if creds_dict.get("token_expiry"):
         expiry = datetime.fromisoformat(str(creds_dict["token_expiry"]))
         if expiry.tzinfo is None:
-            expiry = expiry.replace(tzinfo=timezone.utc)
+            expiry = expiry.replace(tzinfo=UTC)
 
     scopes = None
     if creds_dict.get("scope"):
@@ -79,7 +79,7 @@ def _build_credentials(creds_dict: dict[str, str | None]) -> Credentials:
     return Credentials(
         token=creds_dict.get("access_token"),
         refresh_token=creds_dict.get("refresh_token"),
-        token_uri="https://oauth2.googleapis.com/token",
+        token_uri="https://oauth2.googleapis.com/token",  # noqa: S106
         client_id=settings.google_client_id,
         client_secret=settings.google_client_secret,
         scopes=scopes,

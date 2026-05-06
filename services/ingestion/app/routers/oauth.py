@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from sqlalchemy import select, update
@@ -10,6 +11,8 @@ from app.models import OAuthToken, User
 from app.services.google_photos import build_auth_url, exchange_code
 from app.services.redis_state import consume_state_token, create_state_token
 
+DbSession = Annotated[AsyncSession, Depends(get_db)]
+
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
 
@@ -17,7 +20,7 @@ router = APIRouter(prefix="/oauth", tags=["oauth"])
 async def google_oauth_init(
     user_id: uuid.UUID,
     request: Request,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> dict[str, str]:
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
@@ -36,7 +39,7 @@ async def google_oauth_callback(
     state: str,
     request: Request,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> dict[str, str]:
     parts = state.split(":", 1)
     if len(parts) != 2:
@@ -64,7 +67,7 @@ async def google_oauth_callback(
     if token_data.get("token_expiry"):
         token_expiry = datetime.fromisoformat(str(token_data["token_expiry"]))
         if token_expiry.tzinfo is None:
-            token_expiry = token_expiry.replace(tzinfo=timezone.utc)
+            token_expiry = token_expiry.replace(tzinfo=UTC)
 
     existing_result = await db.execute(
         select(OAuthToken).where(
@@ -94,7 +97,7 @@ async def google_oauth_callback(
                 refresh_token=token_data.get("refresh_token") or oauth_token.refresh_token,
                 token_expiry=token_expiry,
                 scope=token_data.get("scope"),
-                updated_at=datetime.now(tz=timezone.utc),
+                updated_at=datetime.now(tz=UTC),
             )
         )
 

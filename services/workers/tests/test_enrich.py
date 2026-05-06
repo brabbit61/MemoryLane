@@ -1,9 +1,7 @@
-import io
 import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
-from PIL import Image
 
 from app.models import Photo, PhotoEmbedding
 from app.tasks import _enrich
@@ -50,9 +48,7 @@ def test_enrich_creates_embedding_and_marks_enriched(
     ):
         _enrich(photo_id)
 
-    embedding_added = next(
-        (obj for obj in added_objects if isinstance(obj, PhotoEmbedding)), None
-    )
+    embedding_added = next((obj for obj in added_objects if isinstance(obj, PhotoEmbedding)), None)
     assert embedding_added is not None, "PhotoEmbedding was not added to the session"
     assert len(embedding_added.embedding) == 768
 

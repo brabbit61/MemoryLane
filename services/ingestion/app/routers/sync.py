@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import select, update
@@ -10,6 +11,8 @@ from app.models import OAuthToken, Photo, User
 from app.services.google_photos import get_media_item_bytes, list_media_items
 from app.services.s3 import upload_photo
 from app.tasks import dispatch_enrich_photo
+
+DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -89,9 +92,7 @@ async def _sync_google_photos(db: AsyncSession, user_id: uuid.UUID) -> None:
                 content_type=mime_type,
             )
 
-            await db.execute(
-                update(Photo).where(Photo.id == photo.id).values(s3_key=s3_key)
-            )
+            await db.execute(update(Photo).where(Photo.id == photo.id).values(s3_key=s3_key))
             await db.commit()
 
             dispatch_enrich_photo(str(photo.id))
@@ -99,7 +100,7 @@ async def _sync_google_photos(db: AsyncSession, user_id: uuid.UUID) -> None:
     await db.execute(
         update(OAuthToken)
         .where(OAuthToken.id == oauth_token.id)
-        .values(last_synced_at=datetime.now(tz=timezone.utc))
+        .values(last_synced_at=datetime.now(tz=UTC))
     )
     await db.commit()
 
@@ -108,7 +109,7 @@ async def _sync_google_photos(db: AsyncSession, user_id: uuid.UUID) -> None:
 async def sync_google_photos(
     user_id: uuid.UUID,
     background_tasks: BackgroundTasks,
-    db: AsyncSession = Depends(get_db),
+    db: DbSession,
 ) -> dict[str, str]:
     result = await db.execute(select(User).where(User.id == user_id))
     if result.scalar_one_or_none() is None:

@@ -83,7 +83,7 @@ async def test_callback_success(
         patch("app.routers.oauth.get_db") as mock_get_db,
         patch("app.routers.sync.run_google_sync") as mock_sync,
     ):
-        mock_get_db.return_value = _async_ctx(mock_db)
+        mock_get_db.return_value = _AsyncCtx(mock_db)
         response = await client.get(
             f"/oauth/google/callback?code=real-code&state=valid-token:{dev_user_id}"
         )
@@ -93,7 +93,7 @@ async def test_callback_success(
     mock_sync.assert_called_once()
 
 
-class _async_ctx:
+class _AsyncCtx:
     """Minimal async context manager shim for patching get_db."""
 
     def __init__(self, value: object) -> None:

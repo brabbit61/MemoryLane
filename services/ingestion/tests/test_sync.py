@@ -26,8 +26,8 @@ async def test_sync_dispatches_enrich_per_new_photo() -> None:
         tenant_id=tenant_id,
         user_id=user_id,
         provider="google",
-        access_token="acc",
-        refresh_token="ref",
+        access_token="acc",  # noqa: S106
+        refresh_token="ref",  # noqa: S106
         last_synced_at=None,
     )
 

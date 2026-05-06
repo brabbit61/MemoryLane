@@ -1,17 +1,20 @@
+import contextlib
 import io
-import struct
+import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import boto3
-from PIL import Image, TiffImagePlugin
+from PIL import Image
 from sqlalchemy import update
 
 from app.clip_model import encode_image
+from app.config import settings
 from app.db import get_db_session
 from app.models import Photo, PhotoEmbedding
-from app.config import settings
 from app.worker import celery_app
+
+logger = logging.getLogger(__name__)
 
 
 def _s3_client():  # type: ignore[no-untyped-def]
@@ -34,12 +37,12 @@ def _extract_exif(image: Image.Image) -> dict[str, object]:
 
             # DateTimeOriginal tag = 36867
             if 36867 in raw:
-                try:
-                    exif["taken_at"] = datetime.strptime(
-                        str(raw[36867]), "%Y:%m:%d %H:%M:%S"
-                    ).replace(tzinfo=timezone.utc).isoformat()
-                except ValueError:
-                    pass
+                with contextlib.suppress(ValueError):
+                    exif["taken_at"] = (
+                        datetime.strptime(str(raw[36867]), "%Y:%m:%d %H:%M:%S")
+                        .replace(tzinfo=UTC)
+                        .isoformat()
+                    )
 
             # GPS IFD tag = 34853
             gps_ifd = raw.get_ifd(0x8825)
@@ -51,7 +54,7 @@ def _extract_exif(image: Image.Image) -> dict[str, object]:
                 if lon is not None:
                     exif["longitude"] = lon
     except Exception:
-        pass
+        logger.debug("EXIF extraction failed", exc_info=True)
     return exif
 
 
@@ -80,7 +83,7 @@ def _generate_thumbnails(
 ) -> None:
     for size in (256, 1024):
         thumb = image.copy()
-        thumb.thumbnail((size, size), Image.LANCZOS)
+        thumb.thumbnail((size, size), Image.Resampling.LANCZOS)
         buf = io.BytesIO()
         thumb.save(buf, format="JPEG")
         thumb_key = s3_key_base.replace("originals/", f"thumbnails/{size}/", 1)
@@ -110,9 +113,7 @@ def _enrich(photo_id: str) -> None:
 
         embedding_vec = encode_image(image)
 
-        existing_emb = (
-            db.query(PhotoEmbedding).filter(PhotoEmbedding.photo_id == photo.id).first()
-        )
+        existing_emb = db.query(PhotoEmbedding).filter(PhotoEmbedding.photo_id == photo.id).first()
         if existing_emb is None:
             emb = PhotoEmbedding(
                 tenant_id=photo.tenant_id,
@@ -126,7 +127,7 @@ def _enrich(photo_id: str) -> None:
 
         update_vals: dict[str, object] = {
             "status": "enriched",
-            "updated_at": datetime.now(tz=timezone.utc),
+            "updated_at": datetime.now(tz=UTC),
             "width": exif.get("width", photo.width),
             "height": exif.get("height", photo.height),
         }
