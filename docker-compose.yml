@@ -64,6 +64,63 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  ingestion-svc:
+    build:
+      context: ./services/ingestion
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      MEMORYLANE_ENVIRONMENT: development
+      MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@postgres:5432/memorylane
+      MEMORYLANE_REDIS_URL: redis://redis:6379/0
+      MEMORYLANE_CELERY_BROKER_URL: redis://redis:6379/1
+      MEMORYLANE_CELERY_BACKEND_URL: redis://redis:6379/1
+      MEMORYLANE_S3_ENDPOINT_URL: http://minio:9000
+      MEMORYLANE_S3_BUCKET_PHOTOS: memorylane-photos
+      MEMORYLANE_AWS_ACCESS_KEY_ID: minioadmin
+      MEMORYLANE_AWS_SECRET_ACCESS_KEY: minioadmin
+      MEMORYLANE_GOOGLE_CLIENT_ID: ${MEMORYLANE_GOOGLE_CLIENT_ID:-}
+      MEMORYLANE_GOOGLE_CLIENT_SECRET: ${MEMORYLANE_GOOGLE_CLIENT_SECRET:-}
+      MEMORYLANE_GOOGLE_REDIRECT_URI: http://localhost:8001/oauth/google/callback
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+  celery-worker:
+    build:
+      context: ./services/workers
+      dockerfile: Dockerfile
+    environment:
+      MEMORYLANE_DATABASE_URL: postgresql+psycopg2://memorylane:memorylane@postgres:5432/memorylane
+      MEMORYLANE_CELERY_BROKER_URL: redis://redis:6379/1
+      MEMORYLANE_CELERY_BACKEND_URL: redis://redis:6379/1
+      MEMORYLANE_S3_ENDPOINT_URL: http://minio:9000
+      MEMORYLANE_S3_BUCKET_PHOTOS: memorylane-photos
+      MEMORYLANE_AWS_ACCESS_KEY_ID: minioadmin
+      MEMORYLANE_AWS_SECRET_ACCESS_KEY: minioadmin
+      MEMORYLANE_CLIP_DEVICE: cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:

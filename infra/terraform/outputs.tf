@@ -22,3 +22,8 @@ output "cognito_user_pool_id" {
   description = "Cognito user pool ID"
   value       = module.cognito.user_pool_id
 }
+
+output "ecr_repository_urls" {
+  description = "ECR repository URLs keyed by service name"
+  value       = module.ecr.repository_urls
+}
