@@ -17,7 +17,7 @@ from app.worker import celery_app
 def _s3_client():  # type: ignore[no-untyped-def]
     return boto3.client(
         "s3",
-        endpoint_url=settings.s3_endpoint_url,
+        endpoint_url=settings.s3_endpoint_url or None,
         aws_access_key_id=settings.aws_access_key_id,
         aws_secret_access_key=settings.aws_secret_access_key,
         region_name=settings.aws_region,

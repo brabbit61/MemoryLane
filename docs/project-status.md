@@ -123,12 +123,22 @@ aws dynamodb create-table \
 
 ### Apply
 
+For a full environment build-out:
+
 ```bash
 cd infra/terraform
 terraform init
 terraform plan -var-file=environments/dev/terraform.tfvars -out=tfplan.dev
 terraform apply tfplan.dev
 ```
+
+To bring up only the S3 buckets (the minimum needed for ingestion + search against real AWS):
+
+```bash
+terraform apply -target=module.s3 -var-file=environments/dev/terraform.tfvars
+```
+
+This provisions `memorylane-dev-photos` and `memorylane-dev-model-artifacts`. To point the running services at the real buckets, set the four `MEMORYLANE_AWS_*` / `MEMORYLANE_S3_*` vars in `.env` (see [.env.example](../.env.example)) and restart the stack. Leaving `MEMORYLANE_S3_ENDPOINT_URL` unset keeps photos in the local MinIO container.
 
 ### Enable ECR push in CI (after apply)
 

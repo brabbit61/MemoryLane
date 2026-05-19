@@ -10,7 +10,7 @@ _session = aioboto3.Session(
 
 
 def _client():  # type: ignore[no-untyped-def]
-    return _session.client("s3", endpoint_url=settings.s3_endpoint_url)
+    return _session.client("s3", endpoint_url=settings.s3_endpoint_url or None)
 
 
 async def ensure_bucket_exists() -> None:

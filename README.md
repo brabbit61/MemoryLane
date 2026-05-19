@@ -50,12 +50,14 @@ docker run --rm --gpus all nvidia/cuda:12.1.1-base-ubuntu22.04 nvidia-smi
 
 ### 2. Environment file
 
-Create `.env` at the repo root (gitignored):
+Copy [.env.example](.env.example) to `.env` (gitignored) and fill in the Google OAuth credentials.
 
 ```env
 MEMORYLANE_GOOGLE_CLIENT_ID=<your-client-id>
 MEMORYLANE_GOOGLE_CLIENT_SECRET=<your-client-secret>
 ```
+
+By default the stack stores photos in the local **MinIO** container. To store them in a real **AWS S3** bucket instead, uncomment the `MEMORYLANE_S3_*` / `MEMORYLANE_AWS_*` block in `.env.example`. See [docs/project-status.md](docs/project-status.md#terraform-aws-deployment-phase-2) for the Terraform-managed setup.
 
 ---
 
