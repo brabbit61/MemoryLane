@@ -1,11 +1,19 @@
+import io
 import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
+from PIL import Image
 
 from app.models import Photo, PhotoEmbedding
 from app.tasks import _enrich
-from tests.conftest import make_minimal_jpeg
+
+
+def _make_minimal_jpeg() -> bytes:
+    img = Image.new("RGB", (10, 10), color=(255, 0, 0))
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG")
+    return buf.getvalue()
 
 
 @pytest.fixture()
@@ -24,7 +32,7 @@ def test_enrich_creates_embedding_and_marks_enriched(
     photo_id: str,
     fake_photo: Photo,
 ) -> None:
-    jpeg_bytes = make_minimal_jpeg()
+    jpeg_bytes = _make_minimal_jpeg()
     fake_embedding = [0.0] * 768
 
     mock_s3_resp = {"Body": MagicMock(read=MagicMock(return_value=jpeg_bytes))}
