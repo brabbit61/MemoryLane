@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +29,10 @@ async def google_oauth_init(
 
     state_token = await create_state_token(request.app.state.redis)
     await request.app.state.redis.set(f"oauth_user:{state_token}", str(user_id), ex=600)
-    auth_url = build_auth_url(f"{state_token}:{user_id}")
+    auth_url, code_verifier = build_auth_url(f"{state_token}:{user_id}")
+    # Persist PKCE verifier alongside the state so the callback can complete the
+    # exchange. Same TTL as the state itself.
+    await request.app.state.redis.set(f"oauth_pkce:{state_token}", code_verifier, ex=600)
     return {"auth_url": auth_url}
 
 
@@ -38,7 +41,6 @@ async def google_oauth_callback(
     code: str,
     state: str,
     request: Request,
-    background_tasks: BackgroundTasks,
     db: DbSession,
 ) -> dict[str, str]:
     parts = state.split(":", 1)
@@ -51,6 +53,9 @@ async def google_oauth_callback(
     if not valid:
         raise HTTPException(status_code=400, detail="Invalid or expired state token")
 
+    # Retrieve the PKCE verifier we stashed during init (atomic get+delete).
+    code_verifier = await request.app.state.redis.getdel(f"oauth_pkce:{state_token}")
+
     try:
         user_id = uuid.UUID(user_id_str)
     except ValueError as exc:
@@ -61,7 +66,7 @@ async def google_oauth_callback(
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-    token_data = await exchange_code(code)
+    token_data = await exchange_code(code, code_verifier)
 
     token_expiry: datetime | None = None
     if token_data.get("token_expiry"):
@@ -103,8 +108,9 @@ async def google_oauth_callback(
 
     await db.commit()
 
-    from app.routers.sync import run_google_sync
-
-    background_tasks.add_task(run_google_sync, str(user_id))
-
-    return {"status": "connected"}
+    # Picker API is a two-step user-driven flow; sync no longer auto-starts here.
+    # Caller should POST /sync/google/{user_id}/start to open a picker session.
+    return {
+        "status": "connected",
+        "next_step": f"POST /sync/google/{user_id}/start to begin selecting photos",
+    }

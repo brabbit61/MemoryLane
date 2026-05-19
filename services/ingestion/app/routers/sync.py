@@ -8,7 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import async_session_factory, get_db
 from app.models import OAuthToken, Photo, User
-from app.services.google_photos import get_media_item_bytes, list_media_items
+from app.services.google_photos import (
+    create_picker_session,
+    delete_picker_session,
+    get_media_item_bytes,
+    get_picker_session,
+    list_picked_items,
+)
 from app.services.s3 import upload_photo
 from app.tasks import dispatch_enrich_photo
 
@@ -17,38 +23,96 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 router = APIRouter(prefix="/sync", tags=["sync"])
 
 
-async def run_google_sync(user_id: str) -> None:
-    """Runs the full Google Photos sync for a user. Called as a BackgroundTask."""
-    async with async_session_factory() as db:
-        await _sync_google_photos(db, uuid.UUID(user_id))
-
-
-async def _sync_google_photos(db: AsyncSession, user_id: uuid.UUID) -> None:
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
-    if user is None:
-        return
-
-    token_result = await db.execute(
-        select(OAuthToken).where(
-            OAuthToken.user_id == user_id,
-            OAuthToken.provider == "google",
-        )
-    )
-    oauth_token = token_result.scalar_one_or_none()
-    if oauth_token is None:
-        return
-
-    creds_dict: dict[str, str | None] = {
+def _creds_dict(oauth_token: OAuthToken) -> dict[str, str | None]:
+    return {
         "access_token": oauth_token.access_token,
         "refresh_token": oauth_token.refresh_token,
-        "token_expiry": oauth_token.token_expiry.isoformat() if oauth_token.token_expiry else None,
+        "token_expiry": (
+            oauth_token.token_expiry.isoformat() if oauth_token.token_expiry else None
+        ),
         "scope": oauth_token.scope,
     }
 
-    start_date = oauth_token.last_synced_at
 
-    async for page in list_media_items(creds_dict, start_date=start_date):
+async def _load_user_and_token(
+    db: AsyncSession, user_id: uuid.UUID
+) -> tuple[User, OAuthToken]:
+    user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    token = (
+        await db.execute(
+            select(OAuthToken).where(
+                OAuthToken.user_id == user_id,
+                OAuthToken.provider == "google",
+            )
+        )
+    ).scalar_one_or_none()
+    if token is None:
+        raise HTTPException(
+            status_code=400,
+            detail="No Google OAuth token for this user — complete /oauth/google/init first",
+        )
+    return user, token
+
+
+@router.post("/google/{user_id}/start")
+async def start_picker_session(user_id: uuid.UUID, db: DbSession) -> dict[str, object]:
+    _, oauth_token = await _load_user_and_token(db, user_id)
+    session = await create_picker_session(_creds_dict(oauth_token))
+    return {
+        "session_id": session["id"],
+        "picker_uri": session["pickerUri"],
+        "expire_time": session.get("expireTime"),
+        "polling_config": session.get("pollingConfig"),
+        "next_step": (
+            f"Open picker_uri in a browser, pick photos, then POST "
+            f"/sync/google/{user_id}/ingest/{session['id']}"
+        ),
+    }
+
+
+@router.get("/google/{user_id}/session/{session_id}")
+async def check_picker_session(
+    user_id: uuid.UUID,
+    session_id: str,
+    db: DbSession,
+) -> dict[str, object]:
+    _, oauth_token = await _load_user_and_token(db, user_id)
+    session = await get_picker_session(_creds_dict(oauth_token), session_id)
+    return {
+        "session_id": session["id"],
+        "media_items_set": session.get("mediaItemsSet", False),
+        "expire_time": session.get("expireTime"),
+    }
+
+
+@router.post("/google/{user_id}/ingest/{session_id}")
+async def ingest_picked_items(
+    user_id: uuid.UUID,
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    db: DbSession,
+) -> dict[str, str]:
+    # Validate the user and token exist now; the background task re-opens its own session.
+    await _load_user_and_token(db, user_id)
+    background_tasks.add_task(run_picker_ingest, str(user_id), session_id)
+    return {"status": "ingest_started"}
+
+
+async def run_picker_ingest(user_id: str, session_id: str) -> None:
+    """Background task: pull picked items from the Picker session and enqueue enrichment."""
+    async with async_session_factory() as db:
+        await _ingest_picked_items(db, uuid.UUID(user_id), session_id)
+
+
+async def _ingest_picked_items(
+    db: AsyncSession, user_id: uuid.UUID, session_id: str
+) -> None:
+    user, oauth_token = await _load_user_and_token(db, user_id)
+    creds_dict = _creds_dict(oauth_token)
+
+    async for page in list_picked_items(creds_dict, session_id):
         for item in page:
             external_id = str(item.get("id", ""))
             if not external_id:
@@ -64,11 +128,16 @@ async def _sync_google_photos(db: AsyncSession, user_id: uuid.UUID) -> None:
             if existing.scalar_one_or_none() is not None:
                 continue
 
-            base_url = str(item.get("baseUrl", ""))
-            mime_type = str(item.get("mimeType", "image/jpeg"))
-            filename = str(item.get("filename", ""))
+            media_file = item.get("mediaFile") or {}
+            if not isinstance(media_file, dict):
+                continue
+            base_url = str(media_file.get("baseUrl", ""))
+            mime_type = str(media_file.get("mimeType", "image/jpeg"))
+            filename = str(media_file.get("filename", ""))
+            if not base_url:
+                continue
 
-            photo_bytes = await get_media_item_bytes(base_url)
+            photo_bytes = await get_media_item_bytes(base_url, creds_dict)
 
             photo = Photo(
                 tenant_id=user.tenant_id,
@@ -104,16 +173,8 @@ async def _sync_google_photos(db: AsyncSession, user_id: uuid.UUID) -> None:
     )
     await db.commit()
 
-
-@router.post("/google/{user_id}")
-async def sync_google_photos(
-    user_id: uuid.UUID,
-    background_tasks: BackgroundTasks,
-    db: DbSession,
-) -> dict[str, str]:
-    result = await db.execute(select(User).where(User.id == user_id))
-    if result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    background_tasks.add_task(run_google_sync, str(user_id))
-    return {"status": "sync_started"}
+    # Best-effort cleanup; ignore errors if session already expired.
+    try:
+        await delete_picker_session(creds_dict, session_id)
+    except Exception:  # noqa: BLE001 -- non-fatal cleanup
+        pass

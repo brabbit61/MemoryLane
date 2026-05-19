@@ -34,7 +34,8 @@ def dev_tenant_id() -> uuid.UUID:
 def override_db() -> Generator[AsyncMock, None, None]:
     """Override the get_db FastAPI dependency with a mock AsyncSession.
 
-    Yields the AsyncMock so tests can configure its behavior.
+    Patching `app.routers.oauth.get_db` doesn't work — FastAPI captures the
+    dependency reference at app startup. Use `app.dependency_overrides` instead.
     """
     mock_db = AsyncMock()
 

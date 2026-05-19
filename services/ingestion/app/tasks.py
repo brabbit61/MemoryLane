@@ -10,4 +10,4 @@ celery_app = Celery(
 
 
 def dispatch_enrich_photo(photo_id: str) -> None:
-    celery_app.send_task("workers.tasks.enrich_photo", args=[photo_id])
+    celery_app.send_task("workers.tasks.enrich_photo", args=[photo_id], queue="enrichment")

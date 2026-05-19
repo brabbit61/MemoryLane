@@ -2,17 +2,22 @@ FROM python:3.11-slim AS base
 
 WORKDIR /app
 
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser && \
+    mkdir -p /app/model_cache && chown -R appuser:appgroup /app/model_cache
 
-# CUDA 12.1 torch — separate layer for Docker cache; bundles its own CUDA runtime
-# Host provides libcuda.so.1 via nvidia-container-toolkit
+# Pin torch to a cu121 wheel compatible with NVIDIA driver 535+ (CUDA 12.2).
+# Newer torch wheels (cu130) require driver 550+, which not all dev hosts have.
+# Bundles its own CUDA runtime; host provides libcuda.so.1 via nvidia-container-toolkit.
 RUN pip install --no-cache-dir \
-    "torch>=2.2.0" \
+    "torch==2.5.1" \
     --index-url https://download.pytorch.org/whl/cu121 \
     && pip cache purge
 
 COPY pyproject.toml .
-RUN pip install --no-cache-dir --no-deps . && pip cache purge
+# torch is already installed from the CUDA wheel above; pip will see it satisfies
+# the >=2.2.0 constraint and skip reinstalling. All other deps (celery, sqlalchemy,
+# psycopg2, boto3, open-clip, pgvector, Pillow) get installed here.
+RUN pip install --no-cache-dir . && pip cache purge
 
 COPY app/ app/
 

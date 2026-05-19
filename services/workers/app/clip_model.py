@@ -31,5 +31,4 @@ def encode_image(image: Image.Image) -> list[float]:
     with torch.no_grad():
         features = _model.encode_image(tensor)
         features = features / features.norm(dim=-1, keepdim=True)
-    result: list[float] = features.squeeze(0).cpu().tolist()
-    return result
+    return features.squeeze(0).cpu().tolist()

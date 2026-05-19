@@ -21,8 +21,10 @@ class Settings(BaseSettings):
     google_client_id: str = ""
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8001/oauth/google/callback"
+    # Photos Library API was deprecated for library-wide reads on 2025-03-31.
+    # The Picker API replaces it: user explicitly selects photos via a Google-hosted UI.
     google_scopes: list[str] = [
-        "https://www.googleapis.com/auth/photoslibrary.readonly",
+        "https://www.googleapis.com/auth/photospicker.mediaitems.readonly",
         "openid",
         "email",
     ]

@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: memorylane
       POSTGRES_DB: memorylane
     ports:
-      - "5432:5432"
+      - "5433:5432"  # remapped: host 5432 is occupied by system Postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./infra/db/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -83,6 +83,9 @@ services:
       MEMORYLANE_GOOGLE_CLIENT_ID: ${MEMORYLANE_GOOGLE_CLIENT_ID:-}
       MEMORYLANE_GOOGLE_CLIENT_SECRET: ${MEMORYLANE_GOOGLE_CLIENT_SECRET:-}
       MEMORYLANE_GOOGLE_REDIRECT_URI: http://localhost:8001/oauth/google/callback
+      # Google returns full-URL form of "email" scope; oauthlib treats this as a
+      # scope mismatch and raises unless we relax the comparison.
+      OAUTHLIB_RELAX_TOKEN_SCOPE: "1"
     depends_on:
       postgres:
         condition: service_healthy
@@ -105,6 +108,8 @@ services:
       MEMORYLANE_AWS_ACCESS_KEY_ID: minioadmin
       MEMORYLANE_AWS_SECRET_ACCESS_KEY: minioadmin
       MEMORYLANE_CLIP_DEVICE: cuda
+      HF_HOME: /app/model_cache
+      TORCH_HOME: /app/model_cache
     deploy:
       resources:
         reservations:

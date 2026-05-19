@@ -44,18 +44,11 @@ disallow_untyped_defs = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["celery.*", "redis.*", "boto3.*", "botocore.*", "aioboto3.*"]
+module = ["celery.*", "redis.*", "boto3.*", "botocore.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = [
-    "open_clip.*",
-    "torch.*",
-    "google.*",
-    "googleapiclient.*",
-    "google_auth_oauthlib.*",
-    "pgvector.*",
-]
+module = ["open_clip.*", "torch.*", "google.*", "googleapiclient.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

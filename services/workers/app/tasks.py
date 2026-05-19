@@ -1,9 +1,6 @@
-import contextlib
 import io
-import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 import boto3
 from PIL import Image
@@ -15,10 +12,8 @@ from app.db import get_db_session
 from app.models import Photo, PhotoEmbedding
 from app.worker import celery_app
 
-logger = logging.getLogger(__name__)
 
-
-def _s3_client() -> Any:
+def _s3_client():  # type: ignore[no-untyped-def]
     return boto3.client(
         "s3",
         endpoint_url=settings.s3_endpoint_url,
@@ -38,12 +33,14 @@ def _extract_exif(image: Image.Image) -> dict[str, object]:
 
             # DateTimeOriginal tag = 36867
             if 36867 in raw:
-                with contextlib.suppress(ValueError):
+                try:
                     exif["taken_at"] = (
                         datetime.strptime(str(raw[36867]), "%Y:%m:%d %H:%M:%S")
                         .replace(tzinfo=UTC)
                         .isoformat()
                     )
+                except ValueError:
+                    pass
 
             # GPS IFD tag = 34853
             gps_ifd = raw.get_ifd(0x8825)
@@ -55,7 +52,7 @@ def _extract_exif(image: Image.Image) -> dict[str, object]:
                 if lon is not None:
                     exif["longitude"] = lon
     except Exception:
-        logger.debug("EXIF extraction failed", exc_info=True)
+        pass
     return exif
 
 
@@ -80,15 +77,15 @@ def _dms_to_decimal(
 def _generate_thumbnails(
     image: Image.Image,
     s3_key_base: str,
-    s3: Any,
+    s3: object,
 ) -> None:
     for size in (256, 1024):
         thumb = image.copy()
-        thumb.thumbnail((size, size), Image.Resampling.LANCZOS)
+        thumb.thumbnail((size, size), Image.LANCZOS)
         buf = io.BytesIO()
         thumb.save(buf, format="JPEG")
         thumb_key = s3_key_base.replace("originals/", f"thumbnails/{size}/", 1)
-        s3.put_object(
+        s3.put_object(  # type: ignore[union-attr]
             Bucket=settings.s3_bucket_photos,
             Key=thumb_key,
             Body=buf.getvalue(),
@@ -143,8 +140,8 @@ def _enrich(photo_id: str) -> None:
         db.commit()
 
 
-@celery_app.task(bind=True, name="workers.tasks.enrich_photo", max_retries=3)  # type: ignore[untyped-decorator]
-def enrich_photo(self: Any, photo_id: str) -> None:
+@celery_app.task(bind=True, name="workers.tasks.enrich_photo", max_retries=3)  # type: ignore[misc]
+def enrich_photo(self, photo_id: str) -> None:  # type: ignore[no-untyped-def]
     try:
         _enrich(photo_id)
     except Exception as exc:
