@@ -35,9 +35,7 @@ def _creds_dict(oauth_token: OAuthToken) -> dict[str, str | None]:
     }
 
 
-async def _load_user_and_token(
-    db: AsyncSession, user_id: uuid.UUID
-) -> tuple[User, OAuthToken]:
+async def _load_user_and_token(db: AsyncSession, user_id: uuid.UUID) -> tuple[User, OAuthToken]:
     user = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
@@ -107,9 +105,7 @@ async def run_picker_ingest(user_id: str, session_id: str) -> None:
         await _ingest_picked_items(db, uuid.UUID(user_id), session_id)
 
 
-async def _ingest_picked_items(
-    db: AsyncSession, user_id: uuid.UUID, session_id: str
-) -> None:
+async def _ingest_picked_items(db: AsyncSession, user_id: uuid.UUID, session_id: str) -> None:
     user, oauth_token = await _load_user_and_token(db, user_id)
     creds_dict = _creds_dict(oauth_token)
 
