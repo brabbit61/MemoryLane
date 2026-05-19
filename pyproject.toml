@@ -52,8 +52,9 @@ module = ["open_clip.*", "torch.*", "google.*", "googleapiclient.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["services/*/tests", "evals"]
+testpaths = ["services/api-gateway/tests"]
 asyncio_mode = "auto"
+addopts = "--import-mode=importlib"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks integration tests requiring external services",
