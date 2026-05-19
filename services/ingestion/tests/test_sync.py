@@ -28,8 +28,8 @@ async def test_picker_ingest_dispatches_enrich_per_new_photo() -> None:
         tenant_id=tenant_id,
         user_id=user_id,
         provider="google",
-        access_token="acc-token",
-        refresh_token="ref-token",
+        access_token="acc-token",  # noqa: S106
+        refresh_token="ref-token",  # noqa: S106
         last_synced_at=None,
     )
 
@@ -109,8 +109,8 @@ async def test_picker_ingest_skips_items_without_base_url() -> None:
         tenant_id=tenant_id,
         user_id=user_id,
         provider="google",
-        access_token="acc",
-        refresh_token="ref",
+        access_token="acc",  # noqa: S106
+        refresh_token="ref",  # noqa: S106
         last_synced_at=None,
     )
 

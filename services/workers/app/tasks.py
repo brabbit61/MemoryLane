@@ -1,3 +1,4 @@
+import contextlib
 import io
 import uuid
 from datetime import UTC, datetime
@@ -25,7 +26,7 @@ def _s3_client():  # type: ignore[no-untyped-def]
 
 def _extract_exif(image: Image.Image) -> dict[str, object]:
     exif: dict[str, object] = {}
-    try:
+    with contextlib.suppress(Exception):
         raw = image.getexif()
         if raw:
             exif["width"] = image.width
@@ -33,14 +34,12 @@ def _extract_exif(image: Image.Image) -> dict[str, object]:
 
             # DateTimeOriginal tag = 36867
             if 36867 in raw:
-                try:
+                with contextlib.suppress(ValueError):
                     exif["taken_at"] = (
                         datetime.strptime(str(raw[36867]), "%Y:%m:%d %H:%M:%S")
                         .replace(tzinfo=UTC)
                         .isoformat()
                     )
-                except ValueError:
-                    pass
 
             # GPS IFD tag = 34853
             gps_ifd = raw.get_ifd(0x8825)
@@ -51,8 +50,6 @@ def _extract_exif(image: Image.Image) -> dict[str, object]:
                     exif["latitude"] = lat
                 if lon is not None:
                     exif["longitude"] = lon
-    except Exception:
-        pass
     return exif
 
 

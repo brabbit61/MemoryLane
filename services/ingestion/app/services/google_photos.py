@@ -80,7 +80,7 @@ def _build_credentials(creds_dict: dict[str, str | None]) -> Credentials:
     return Credentials(
         token=creds_dict.get("access_token"),
         refresh_token=creds_dict.get("refresh_token"),
-        token_uri="https://oauth2.googleapis.com/token",
+        token_uri="https://oauth2.googleapis.com/token",  # noqa: S106
         client_id=settings.google_client_id,
         client_secret=settings.google_client_secret,
         scopes=scopes,

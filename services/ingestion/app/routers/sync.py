@@ -1,3 +1,4 @@
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -174,7 +175,5 @@ async def _ingest_picked_items(
     await db.commit()
 
     # Best-effort cleanup; ignore errors if session already expired.
-    try:
+    with contextlib.suppress(Exception):
         await delete_picker_session(creds_dict, session_id)
-    except Exception:  # noqa: BLE001 -- non-fatal cleanup
-        pass
