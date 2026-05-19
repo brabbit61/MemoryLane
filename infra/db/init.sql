@@ -64,6 +64,31 @@ CREATE INDEX idx_photo_embeddings_tenant_user ON photo_embeddings(tenant_id, use
 ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE photo_embeddings ENABLE ROW LEVEL SECURITY;
 
+-- Phase 1: Google Photos ingestion additions
+ALTER TABLE photos ADD COLUMN IF NOT EXISTS source VARCHAR(32) NOT NULL DEFAULT 'google_photos';
+ALTER TABLE photos ADD COLUMN IF NOT EXISTS external_id VARCHAR(512);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_photos_external_id
+    ON photos(tenant_id, user_id, external_id)
+    WHERE external_id IS NOT NULL;
+
+-- OAuth token storage (one row per user+provider)
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    provider VARCHAR(64) NOT NULL,
+    access_token TEXT NOT NULL,
+    refresh_token TEXT,
+    token_expiry TIMESTAMPTZ,
+    scope TEXT,
+    last_synced_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(user_id, provider)
+);
+CREATE INDEX IF NOT EXISTS idx_oauth_tokens_user ON oauth_tokens(user_id, provider);
+ALTER TABLE oauth_tokens ENABLE ROW LEVEL SECURITY;
+
 -- Seed a default tenant for local development
 INSERT INTO tenants (id, name) VALUES
     ('00000000-0000-0000-0000-000000000001', 'Local Development')
