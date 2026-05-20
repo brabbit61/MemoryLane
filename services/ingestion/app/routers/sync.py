@@ -1,4 +1,5 @@
 import contextlib
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -15,9 +16,12 @@ from app.services.google_photos import (
     get_media_item_bytes,
     get_picker_session,
     list_picked_items,
+    parse_picked_item,
 )
 from app.services.s3 import upload_photo
 from app.tasks import dispatch_enrich_photo
+
+logger = logging.getLogger(__name__)
 
 DbSession = Annotated[AsyncSession, Depends(get_db)]
 
@@ -111,40 +115,43 @@ async def _ingest_picked_items(db: AsyncSession, user_id: uuid.UUID, session_id:
 
     async for page in list_picked_items(creds_dict, session_id):
         for item in page:
-            external_id = str(item.get("id", ""))
-            if not external_id:
+            parsed = parse_picked_item(item)
+            if parsed is None:
+                continue
+
+            if parsed.item_type != "PHOTO":
+                logger.info(
+                    "Skipping non-photo picked item: id=%s type=%s",
+                    parsed.external_id,
+                    parsed.item_type,
+                )
                 continue
 
             existing = await db.execute(
                 select(Photo).where(
                     Photo.tenant_id == user.tenant_id,
                     Photo.user_id == user_id,
-                    Photo.external_id == external_id,
+                    Photo.external_id == parsed.external_id,
                 )
             )
             if existing.scalar_one_or_none() is not None:
                 continue
 
-            media_file = item.get("mediaFile") or {}
-            if not isinstance(media_file, dict):
-                continue
-            base_url = str(media_file.get("baseUrl", ""))
-            mime_type = str(media_file.get("mimeType", "image/jpeg"))
-            filename = str(media_file.get("filename", ""))
-            if not base_url:
-                continue
-
-            photo_bytes = await get_media_item_bytes(base_url, creds_dict)
+            photo_bytes = await get_media_item_bytes(parsed.base_url, creds_dict)
 
             photo = Photo(
                 tenant_id=user.tenant_id,
                 user_id=user_id,
                 s3_key="",
-                filename=filename or None,
-                mime_type=mime_type,
+                filename=parsed.filename,
+                mime_type=parsed.mime_type,
                 file_size_bytes=len(photo_bytes),
+                width=parsed.width,
+                height=parsed.height,
+                taken_at=parsed.taken_at,
+                exif_data=parsed.exif_data or None,
                 source="google_photos",
-                external_id=external_id,
+                external_id=parsed.external_id,
                 status="pending",
             )
             db.add(photo)
@@ -155,7 +162,7 @@ async def _ingest_picked_items(db: AsyncSession, user_id: uuid.UUID, session_id:
                 str(user_id),
                 str(photo.id),
                 photo_bytes,
-                content_type=mime_type,
+                content_type=parsed.mime_type,
             )
 
             await db.execute(update(Photo).where(Photo.id == photo.id).values(s3_key=s3_key))

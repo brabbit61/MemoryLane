@@ -126,7 +126,9 @@ def _enrich(photo_id: str) -> None:
             "width": exif.get("width", photo.width),
             "height": exif.get("height", photo.height),
         }
-        if "taken_at" in exif:
+        # Picker API's createTime is treated as canonical (set at ingest). Only
+        # fall back to EXIF DateTimeOriginal when ingestion didn't supply one.
+        if "taken_at" in exif and photo.taken_at is None:
             update_vals["taken_at"] = datetime.fromisoformat(str(exif["taken_at"]))
         if "latitude" in exif:
             update_vals["latitude"] = exif["latitude"]
