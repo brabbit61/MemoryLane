@@ -34,9 +34,14 @@ resource "aws_security_group" "rds" {
 resource "aws_db_instance" "main" {
   identifier = "${var.project_name}-${var.environment}"
 
-  engine         = "postgres"
-  engine_version = "16.4"
-  instance_class = var.db_instance_class
+  engine = "postgres"
+  # Use a major-version pin (e.g. "16") + auto_minor_version_upgrade so AWS keeps
+  # us on a currently-supported minor. Pinning a specific minor (e.g. "16.4")
+  # breaks when AWS retires that version from new clusters.
+  engine_version              = "16"
+  auto_minor_version_upgrade  = true
+  allow_major_version_upgrade = false
+  instance_class              = var.db_instance_class
 
   allocated_storage     = 20
   max_allocated_storage = 100

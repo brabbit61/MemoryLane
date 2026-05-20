@@ -93,52 +93,45 @@
 
 AWS CLI configured with a user/role that has `AdministratorAccess`.
 
-### Bootstrap (one-time — before `terraform init`)
+### Bootstrap (one-time — before the main `terraform init`)
 
-The S3 backend and DynamoDB lock table must exist before Terraform can manage state:
+The main stack stores state in `s3://memorylane-terraform-state` and uses S3-native locking (`use_lockfile = true`), so only the state bucket itself needs to exist up front. A small Terraform config in [infra/terraform/bootstrap](../infra/terraform/bootstrap) creates it (local state, gitignored):
 
 ```bash
-# State bucket
-aws s3api create-bucket --bucket memorylane-terraform-state --region us-east-1
-aws s3api put-bucket-versioning \
-  --bucket memorylane-terraform-state \
-  --versioning-configuration Status=Enabled
-aws s3api put-bucket-encryption \
-  --bucket memorylane-terraform-state \
-  --server-side-encryption-configuration \
-    '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
-aws s3api put-public-access-block \
-  --bucket memorylane-terraform-state \
-  --public-access-block-configuration \
-    "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true"
-
-# Lock table
-aws dynamodb create-table \
-  --table-name memorylane-terraform-locks \
-  --attribute-definitions AttributeName=LockID,AttributeType=S \
-  --key-schema AttributeName=LockID,KeyType=HASH \
-  --billing-mode PAY_PER_REQUEST \
-  --region us-east-1
+cd infra/terraform/bootstrap
+terraform init
+terraform apply        # creates s3://memorylane-terraform-state
 ```
+
+The bucket has `prevent_destroy = true` to guard against accidental teardown.
+
+> **Note for AWS IAM Identity Center users:** the Terraform AWS provider doesn't yet read the v2.30+ `aws login` cache at `~/.aws/login/cache/`. If `terraform plan` errors with `No valid credential sources found`, export the active session into env vars first:
+> ```bash
+> eval "$(aws configure export-credentials --format env)"
+> ```
 
 ### Apply
 
-For a full environment build-out:
+**Phase 1b only needs the S3 module.** Apply S3 by itself — `terraform apply` without `-target` will also spin up an EKS cluster (~$73/mo control plane) and a NAT gateway (~$33/mo), which are out of scope until Phase 2:
 
 ```bash
 cd infra/terraform
 terraform init
-terraform plan -var-file=environments/dev/terraform.tfvars -out=tfplan.dev
-terraform apply tfplan.dev
-```
-
-To bring up only the S3 buckets (the minimum needed for ingestion + search against real AWS):
-
-```bash
 terraform apply -target=module.s3 -var-file=environments/dev/terraform.tfvars
 ```
 
 This provisions `memorylane-dev-photos` and `memorylane-dev-model-artifacts`. To point the running services at the real buckets, set the four `MEMORYLANE_AWS_*` / `MEMORYLANE_S3_*` vars in `.env` (see [.env.example](../.env.example)) and restart the stack. Leaving `MEMORYLANE_S3_ENDPOINT_URL` unset keeps photos in the local MinIO container.
+
+> **STS-session caveat:** with `aws login` (IAM Identity Center), exported credentials are only valid for the session window (typically a few hours). A full-stack apply that runs through EKS creation can outlast them, leaving the state save to fail with `ExpiredToken`. Either re-`eval "$(aws configure export-credentials --format env)"` before any long apply, or use longer-lived credentials (an IAM user / role) for big runs.
+
+### Phase 2+ — full environment build-out
+
+When you're ready for EKS, RDS, Cognito, ECR, and the VPC:
+
+```bash
+terraform plan -var-file=environments/dev/terraform.tfvars -out=tfplan.dev
+terraform apply tfplan.dev
+```
 
 ### Enable ECR push in CI (after apply)
 

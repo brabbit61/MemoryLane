@@ -1,0 +1,6 @@
+# Local state for the bootstrap stack stays out of git.
+# Recovery: `terraform import aws_s3_bucket.state memorylane-terraform-state`.
+terraform.tfstate
+terraform.tfstate.backup
+.terraform/
+.terraform.lock.hcl
