@@ -23,4 +23,6 @@ COPY app/ app/
 
 USER appuser
 
-CMD ["celery", "-A", "app.worker", "worker", "--loglevel=info", "-Q", "enrichment"]
+# --concurrency=1: CLIP ViT-L/14 loads its own ~1.5 GB on the GPU per worker
+# process. Forking 16 of them OOMs anything smaller than a 24 GB card.
+CMD ["celery", "-A", "app.worker", "worker", "--loglevel=info", "-Q", "enrichment", "--concurrency=1"]

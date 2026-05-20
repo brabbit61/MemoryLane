@@ -40,6 +40,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "photos" {
     id     = "transition-old-photos"
     status = "Enabled"
 
+    # Apply to every object in the bucket. The aws provider requires either
+    # `filter` or `prefix` on each rule; the empty filter is the v4+ idiom.
+    filter {}
+
     transition {
       days          = 90
       storage_class = "STANDARD_IA"

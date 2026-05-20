@@ -12,7 +12,9 @@ class Settings(BaseSettings):
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_backend_url: str = "redis://localhost:6379/1"
 
-    s3_endpoint_url: str = "http://localhost:9000"
+    # None / empty => boto3 uses the real AWS S3 endpoint for aws_region.
+    # Set to http://minio:9000 (compose) or http://localhost:9000 (host) for MinIO.
+    s3_endpoint_url: str | None = None
     s3_bucket_photos: str = "memorylane-photos"
     aws_access_key_id: str = "minioadmin"
     aws_secret_access_key: str = "minioadmin"  # noqa: S105
