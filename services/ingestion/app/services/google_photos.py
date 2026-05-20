@@ -1,5 +1,7 @@
 import asyncio
+import contextlib
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 import google.auth.transport.requests
@@ -10,6 +12,93 @@ from google_auth_oauthlib.flow import Flow
 from app.config import settings
 
 PICKER_API_BASE = "https://photospicker.googleapis.com/v1"
+
+
+@dataclass(frozen=True)
+class ParsedPickedItem:
+    external_id: str
+    base_url: str
+    item_type: str  # "PHOTO" | "VIDEO" | other
+    mime_type: str
+    filename: str | None
+    width: int | None
+    height: int | None
+    taken_at: datetime | None
+    exif_data: dict[str, object] = field(default_factory=dict)
+
+
+def _to_int(value: object) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_rfc3339(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value:
+        return None
+    with contextlib.suppress(ValueError):
+        # `datetime.fromisoformat` accepts the trailing "Z" only on 3.11+; normalize for safety.
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(UTC)
+    return None
+
+
+def parse_picked_item(item: dict[str, object]) -> ParsedPickedItem | None:
+    """Map a Picker API mediaItem into the fields we persist.
+
+    Returns None when the item lacks `id` or `mediaFile.baseUrl` (unusable rows).
+    Callers must still filter by `item_type != "PHOTO"` to skip videos.
+    """
+    external_id = str(item.get("id") or "")
+    if not external_id:
+        return None
+
+    media_file = item.get("mediaFile")
+    if not isinstance(media_file, dict):
+        return None
+    base_url = str(media_file.get("baseUrl") or "")
+    if not base_url:
+        return None
+
+    item_type = str(item.get("type") or "PHOTO").upper()
+    metadata = media_file.get("mediaFileMetadata") or {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+
+    exif: dict[str, object] = {"source": "picker_api"}
+    for src_key, dst_key in (
+        ("cameraMake", "camera_make"),
+        ("cameraModel", "camera_model"),
+    ):
+        value = metadata.get(src_key)
+        if value:
+            exif[dst_key] = value
+
+    photo_meta = metadata.get("photoMetadata") or {}
+    if isinstance(photo_meta, dict):
+        for src_key, dst_key in (
+            ("focalLength", "focal_length"),
+            ("apertureFNumber", "aperture_f_number"),
+            ("isoEquivalent", "iso_equivalent"),
+            ("exposureTime", "exposure_time"),
+        ):
+            value = photo_meta.get(src_key)
+            if value is not None:
+                exif[dst_key] = value
+
+    return ParsedPickedItem(
+        external_id=external_id,
+        base_url=base_url,
+        item_type=item_type,
+        mime_type=str(media_file.get("mimeType") or "image/jpeg"),
+        filename=(str(media_file.get("filename") or "") or None),
+        width=_to_int(metadata.get("width")),
+        height=_to_int(metadata.get("height")),
+        taken_at=_parse_rfc3339(item.get("createTime")),
+        exif_data=exif,
+    )
 
 
 def _build_flow() -> Flow:
