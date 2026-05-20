@@ -46,6 +46,7 @@ jobs:
           pip install -r requirements-dev.txt
           pip install -e "services/api-gateway[dev]"
           pip install -e "services/ingestion[dev]"
+          pip install -e "services/search[dev]"
           # workers omitted — requires torch + GPU (tested locally only)
 
       - name: Lint
@@ -64,6 +65,12 @@ jobs:
           MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane
           MEMORYLANE_REDIS_URL: redis://localhost:6379/0
         run: python -m pytest services/ingestion/tests -v --tb=short
+
+      - name: Test search
+        env:
+          MEMORYLANE_ENVIRONMENT: test
+          MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane
+        run: python -m pytest services/search/tests -v --tb=short
 
   build-and-push:
     name: Build & Push to ECR
