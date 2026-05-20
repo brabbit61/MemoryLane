@@ -96,6 +96,27 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  search-svc:
+    build:
+      context: ./services/search
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      MEMORYLANE_ENVIRONMENT: development
+      MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@postgres:5432/memorylane
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
   celery-worker:
     build:
       context: ./services/workers
