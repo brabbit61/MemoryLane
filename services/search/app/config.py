@@ -9,6 +9,10 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane"
 
+    clip_model_name: str = "ViT-L-14"
+    clip_pretrained: str = "openai"
+    clip_device: str = "cuda"
+
     model_config = {"env_prefix": "MEMORYLANE_"}
 
 
