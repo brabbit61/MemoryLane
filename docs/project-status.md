@@ -6,8 +6,9 @@
 |-------|-------------|--------|
 | **Phase 0** | Foundations: monorepo, docker-compose, Terraform skeleton, API gateway, CI | ✅ Complete |
 | **Phase 1** | Google Photos ingestion + CLIP GPU enrichment + pgvector writes | ✅ Complete |
+| **Phase 1b** | S3 Terraform applied; search-svc scaffold, CLIP text encoding, GET /search endpoint | ✅ Complete |
 | Phase 2 | Face detection, event clustering, duplicate detection | Planned |
-| Phase 3 | LangGraph Search Agent, AutoGen Conversational Agent, web UI | Planned |
+| Phase 3 | LangGraph Search Agent, AutoGen Conversational Agent, web UI | 🚧 In Progress |
 | Phase 4 | BLIP-2 captions, LangGraph Album Generation Graph (supervisor), DPO data collection | Planned |
 | Phase 5 | Deep agent capabilities: plan-and-execute, reflection, HITL, chaos evals | Planned |
 | Phase 6 | DPO reranker training pipeline | Planned |
@@ -59,16 +60,20 @@
 
 **End-to-end verified locally**: 7 photos ingested → MinIO S3 → CLIP GPU enrichment → pgvector; self-similarity = 1.0000
 
+### Phase 1b — S3 Terraform + Search Service Foundation
+
+AWS S3 buckets were provisioned via Terraform (`module.s3`). A new `search-svc` (port 8002) was built end-to-end: GPU-capable FastAPI scaffold with async SQLAlchemy, a CLIP ViT-L/14 text encoding module (`encode_text(query) -> list[float]`, 768-dim), and a `GET /search` endpoint that encodes the query, runs a pgvector cosine ANN query over `photo_embeddings`, and returns ranked results with 1-hour pre-signed S3 URLs. Pre-signed URL generation uses sync boto3 and switches between MinIO and real AWS S3 via a single env var. The service is covered by unit tests (mocked CLIP model — no GPU in CI) and wired into docker-compose and the CI matrix.
+
 ---
 
 ## Known Gaps
 
 | Gap | Detail | Planned fix |
 |-----|--------|-------------|
-| `taken_at` is null | Picker API download URL doesn't include EXIF creation time; requires a separate call to `sessions.mediaItems.list` for `creationTime` | Phase 1b |
-| No text-to-image search | Embeddings are written; search endpoint not yet built | Phase 3 |
+| `taken_at` is null | Picker API download URL doesn't include EXIF creation time; requires a separate call to `sessions.mediaItems.list` for `creationTime` | Phase 2 |
+| Search not wired through api-gateway | `GET /search` is served directly from search-svc (port 8002); the api-gateway proxy layer is not yet added | Phase 3 |
 | No face clustering | Phase 2 | Phase 2 |
-| AWS not deployed | Terraform written and validated; `terraform apply` not yet run | Phase 2+ |
+| ECR repo for search-svc | `infra/terraform/modules/ecr` creates repos for api-gateway, ingestion, workers — search needs a 4th | Phase 2 |
 
 ---
 
