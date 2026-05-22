@@ -105,6 +105,11 @@ services:
     environment:
       MEMORYLANE_ENVIRONMENT: development
       MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@postgres:5432/memorylane
+      MEMORYLANE_S3_ENDPOINT_URL: ${MEMORYLANE_S3_ENDPOINT_URL-http://minio:9000}
+      MEMORYLANE_S3_BUCKET_PHOTOS: ${MEMORYLANE_S3_BUCKET_PHOTOS:-memorylane-photos}
+      MEMORYLANE_AWS_ACCESS_KEY_ID: ${MEMORYLANE_AWS_ACCESS_KEY_ID:-minioadmin}
+      MEMORYLANE_AWS_SECRET_ACCESS_KEY: ${MEMORYLANE_AWS_SECRET_ACCESS_KEY:-minioadmin}
+      MEMORYLANE_AWS_REGION: ${MEMORYLANE_AWS_REGION:-us-east-1}
     deploy:
       resources:
         reservations:
@@ -114,6 +119,8 @@ services:
               capabilities: [gpu]
     depends_on:
       postgres:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     restart: unless-stopped
 
