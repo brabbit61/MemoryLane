@@ -110,6 +110,7 @@ services:
       MEMORYLANE_AWS_ACCESS_KEY_ID: ${MEMORYLANE_AWS_ACCESS_KEY_ID:-minioadmin}
       MEMORYLANE_AWS_SECRET_ACCESS_KEY: ${MEMORYLANE_AWS_SECRET_ACCESS_KEY:-minioadmin}
       MEMORYLANE_AWS_REGION: ${MEMORYLANE_AWS_REGION:-us-east-1}
+      HF_HOME: /app/model_cache
     deploy:
       resources:
         reservations:

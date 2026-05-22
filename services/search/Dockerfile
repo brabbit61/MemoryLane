@@ -21,6 +21,8 @@ RUN pip install --no-cache-dir . && pip cache purge
 
 COPY app/ app/
 
+ENV HF_HOME=/app/model_cache
+
 USER appuser
 
 EXPOSE 8002
