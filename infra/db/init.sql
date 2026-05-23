@@ -61,8 +61,26 @@ CREATE INDEX ON photo_embeddings USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX idx_photo_embeddings_tenant_user ON photo_embeddings(tenant_id, user_id);
 
 -- Row-level security policies
+-- FORCE ensures even the table owner (app DB user) obeys policies.
+-- Policy is permissive when app.current_tenant_id is not set (workers, migrations).
+-- API-facing services call SET LOCAL app.current_tenant_id = '...' before querying,
+-- which scopes all reads for that transaction to a single tenant.
 ALTER TABLE photos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE photos FORCE ROW LEVEL SECURITY;
 ALTER TABLE photo_embeddings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE photo_embeddings FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY tenant_isolation ON photos
+    USING (
+        NULLIF(current_setting('app.current_tenant_id', true), '') IS NULL
+        OR tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+    );
+
+CREATE POLICY tenant_isolation ON photo_embeddings
+    USING (
+        NULLIF(current_setting('app.current_tenant_id', true), '') IS NULL
+        OR tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid
+    );
 
 -- Phase 1: Google Photos ingestion additions
 ALTER TABLE photos ADD COLUMN IF NOT EXISTS source VARCHAR(32) NOT NULL DEFAULT 'google_photos';
