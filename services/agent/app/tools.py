@@ -11,9 +11,7 @@ _Params = dict[str, _ParamValue]
 
 async def _call_search(params: _Params) -> list[dict[str, Any]]:
     """Shared transport: strips None values, calls /search, raises on error."""
-    clean: dict[str, str | int | float | bool] = {
-        k: v for k, v in params.items() if v is not None
-    }
+    clean: dict[str, str | int | float | bool] = {k: v for k, v in params.items() if v is not None}
     url = f"{settings.search_service_url}/search"
     async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
         try:
