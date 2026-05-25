@@ -25,7 +25,9 @@ jobs:
           pip install --upgrade pip
           pip install -r requirements-dev.txt
           pip install -e "services/api-gateway[dev]"
+          pip install -e "services/ingestion[dev]"
           pip install -e "services/search[dev]"
+          pip install -e "services/agent[dev]"
 
       - name: Ruff lint
         run: ruff check .
@@ -34,7 +36,11 @@ jobs:
         run: ruff format --check .
 
       - name: Mypy type check
-        run: mypy services/api-gateway/app --ignore-missing-imports
+        run: |
+          mypy services/api-gateway/app --ignore-missing-imports
+          mypy services/ingestion/app --ignore-missing-imports
+          mypy services/search/app --ignore-missing-imports
+          mypy services/agent/app --ignore-missing-imports
 
       - name: Bandit security scan
         run: bandit -r services/ -ll -ii
@@ -78,20 +84,35 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -e "services/api-gateway[dev]"
+          pip install -e "services/ingestion[dev]"
           pip install -e "services/search[dev]"
+          pip install -e "services/agent[dev]"
 
-      - name: Run tests
+      - name: Test api-gateway
         env:
           MEMORYLANE_ENVIRONMENT: test
           MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane
           MEMORYLANE_REDIS_URL: redis://localhost:6379/0
         run: pytest services/api-gateway/tests -v --tb=short
 
-      - name: Run search tests
+      - name: Test ingestion
+        env:
+          MEMORYLANE_ENVIRONMENT: test
+          MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane
+          MEMORYLANE_REDIS_URL: redis://localhost:6379/0
+        run: pytest services/ingestion/tests -v --tb=short
+
+      - name: Test search
         env:
           MEMORYLANE_ENVIRONMENT: test
           MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane
         run: pytest services/search/tests -v --tb=short
+
+      - name: Test agent
+        env:
+          MEMORYLANE_ENVIRONMENT: test
+          MEMORYLANE_ANTHROPIC_API_KEY: sk-ant-placeholder-for-ci
+        run: pytest services/agent/tests -v --tb=short
 
   build:
     name: Build Docker Images
@@ -102,3 +123,6 @@ jobs:
 
       - name: Build api-gateway image
         run: docker build -t memorylane-api-gateway:${{ github.sha }} services/api-gateway
+
+      - name: Build agent-svc image
+        run: docker build -t memorylane-agent-svc:${{ github.sha }} services/agent

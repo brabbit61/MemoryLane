@@ -47,10 +47,18 @@ jobs:
           pip install -e "services/api-gateway[dev]"
           pip install -e "services/ingestion[dev]"
           pip install -e "services/search[dev]"
+          pip install -e "services/agent[dev]"
           # workers omitted — requires torch + GPU (tested locally only)
 
       - name: Lint
         run: ruff check .
+
+      - name: Mypy type check
+        run: |
+          mypy services/api-gateway/app --ignore-missing-imports
+          mypy services/ingestion/app --ignore-missing-imports
+          mypy services/search/app --ignore-missing-imports
+          mypy services/agent/app --ignore-missing-imports
 
       - name: Test api-gateway
         env:
@@ -71,6 +79,12 @@ jobs:
           MEMORYLANE_ENVIRONMENT: test
           MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane
         run: python -m pytest services/search/tests -v --tb=short
+
+      - name: Test agent
+        env:
+          MEMORYLANE_ENVIRONMENT: test
+          MEMORYLANE_ANTHROPIC_API_KEY: sk-ant-placeholder-for-ci
+        run: python -m pytest services/agent/tests -v --tb=short
 
   build-and-push:
     name: Build & Push to ECR
@@ -99,3 +113,11 @@ jobs:
         run: |
           docker build -t $ECR_REGISTRY/memorylane-api-gateway:$IMAGE_TAG services/api-gateway
           docker push $ECR_REGISTRY/memorylane-api-gateway:$IMAGE_TAG
+
+      - name: Build and push agent-svc
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REGISTRY/memorylane-agent-svc:$IMAGE_TAG services/agent
+          docker push $ECR_REGISTRY/memorylane-agent-svc:$IMAGE_TAG
