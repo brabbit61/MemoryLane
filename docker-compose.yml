@@ -125,6 +125,24 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  agent-svc:
+    build:
+      context: ./services/agent
+      dockerfile: Dockerfile
+    ports:
+      - "8003:8003"
+    environment:
+      MEMORYLANE_ENVIRONMENT: development
+      MEMORYLANE_ANTHROPIC_API_KEY: ${MEMORYLANE_ANTHROPIC_API_KEY:-}
+      MEMORYLANE_CLAUDE_MODEL: ${MEMORYLANE_CLAUDE_MODEL:-claude-sonnet-4-6}
+      MEMORYLANE_SEARCH_SERVICE_URL: http://search-svc:8002
+      MEMORYLANE_LANGSMITH_API_KEY: ${MEMORYLANE_LANGSMITH_API_KEY:-}
+      MEMORYLANE_LANGSMITH_PROJECT: ${MEMORYLANE_LANGSMITH_PROJECT:-memorylane-agent}
+    depends_on:
+      search-svc:
+        condition: service_started   # search-svc has no healthcheck
+    restart: unless-stopped
+
   celery-worker:
     build:
       context: ./services/workers
