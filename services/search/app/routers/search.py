@@ -28,7 +28,7 @@ async def search(
     max_latitude: float | None = None,
     min_longitude: float | None = None,
     max_longitude: float | None = None,
-    db: DbSession = ...,
+    db: DbSession = ...,  # type: ignore[assignment]
 ) -> list[SearchResult]:
     # Scope the DB session to this tenant so RLS policies enforce isolation.
     await db.execute(text("SET LOCAL app.current_tenant_id = :tid"), {"tid": str(tenant_id)})

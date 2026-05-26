@@ -11,7 +11,7 @@ def presign_photo_url(s3_key: str, expires_in: int = 3600) -> str:
         aws_secret_access_key=settings.aws_secret_access_key,
         region_name=settings.aws_region,
     )
-    return client.generate_presigned_url(
+    return client.generate_presigned_url(  # type: ignore[no-any-return]
         "get_object",
         Params={"Bucket": settings.s3_bucket_photos, "Key": s3_key},
         ExpiresIn=expires_in,
