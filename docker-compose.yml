@@ -111,13 +111,13 @@ services:
       MEMORYLANE_AWS_SECRET_ACCESS_KEY: ${MEMORYLANE_AWS_SECRET_ACCESS_KEY:-minioadmin}
       MEMORYLANE_AWS_REGION: ${MEMORYLANE_AWS_REGION:-us-east-1}
       HF_HOME: /app/model_cache
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+    healthcheck:
+      # CLIP ViT-L/14 loads lazily on first request; start_period gives it time.
+      test: ["CMD-SHELL", "curl -sf http://localhost:8002/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       postgres:
         condition: service_healthy
@@ -140,7 +140,7 @@ services:
       MEMORYLANE_LANGSMITH_PROJECT: ${MEMORYLANE_LANGSMITH_PROJECT:-memorylane-agent}
     depends_on:
       search-svc:
-        condition: service_started   # search-svc has no healthcheck
+        condition: service_healthy
     restart: unless-stopped
 
   celery-worker:
