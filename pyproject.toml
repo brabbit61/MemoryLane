@@ -9,7 +9,7 @@ authors = [{ name = "Jenit Jain" }]
 [tool.ruff]
 target-version = "py311"
 line-length = 100
-src = ["services/*/app"]
+src = ["src/*/app"]
 
 [tool.ruff.lint]
 select = [
@@ -52,7 +52,7 @@ module = ["open_clip.*", "torch.*", "google.*", "googleapiclient.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["services/api-gateway/tests"]
+testpaths = ["src/api-gateway/tests"]
 asyncio_mode = "auto"
 addopts = "--import-mode=importlib"
 markers = [

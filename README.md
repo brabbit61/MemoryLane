@@ -131,14 +131,14 @@ Set `MEMORYLANE_CLIP_DEVICE=cpu` in `docker-compose.yml` and remove the `deploy.
 All services share `app` as their top-level package name, so tests must run per-service in separate processes to avoid `sys.modules` collisions:
 
 ```bash
-pip install -e "services/api-gateway[dev]"
-python -m pytest services/api-gateway/tests -v
+pip install -e "src/api-gateway[dev]"
+python -m pytest src/api-gateway/tests -v
 
-pip install -e "services/ingestion[dev]"
-python -m pytest services/ingestion/tests -v
+pip install -e "src/ingestion[dev]"
+python -m pytest src/ingestion/tests -v
 
 # Workers (requires torch locally):
-cd services/workers && pip install -e ".[dev]" && pytest tests -v
+cd src/workers && pip install -e ".[dev]" && pytest tests -v
 ```
 
 ---
@@ -147,15 +147,16 @@ cd services/workers && pip install -e ".[dev]" && pytest tests -v
 
 ```
 MemoryLane/
-├── services/
+├── src/
 │   ├── api-gateway/     # FastAPI, port 8000
 │   ├── ingestion/       # FastAPI, port 8001 — OAuth, Picker, S3 upload
 │   ├── workers/         # Celery — CLIP enrichment, thumbnails, EXIF
-│   ├── search/          # Planned (Phase 3)
-│   └── agent/           # Planned (Phase 3)
+│   ├── search/          # FastAPI, port 8002 — CLIP text-to-image search
+│   ├── agent/           # FastAPI, port 8003 — LangGraph agent (Phase 3)
+│   └── ui/              # Next.js frontend (Phase 3)
 ├── infra/
 │   ├── db/init.sql      # Schema + seed data
-│   └── terraform/       # VPC, EKS, RDS, S3, Cognito, ECR modules
+│   └── terraform/       # S3 deployed; VPC/EKS/RDS/Cognito/ECR in Phase 2
 ├── docs/
 │   ├── project-status.md  # Roadmap, phases, design decisions
 │   ├── architecture.md
@@ -163,7 +164,7 @@ MemoryLane/
 │   └── adr/
 ├── .github/workflows/
 │   ├── on-pr.yml        # Lint, type check, security, test, docker build
-│   └── on-main.yml      # Full test suite + ECR push (gated)
+│   └── on-main.yml      # Full test suite
 ├── docker-compose.yml
 └── pyproject.toml
 ```

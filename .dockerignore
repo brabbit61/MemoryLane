@@ -12,8 +12,6 @@ venv
 node_modules
 infra/
 docs/
-evals/
-ml/
-ui/
+src/ui/
 *.md
 LICENSE
