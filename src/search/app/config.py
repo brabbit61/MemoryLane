@@ -17,7 +17,10 @@ class Settings(BaseSettings):
 
     clip_model_name: str = "ViT-L-14"
     clip_pretrained: str = "openai"
-    clip_device: str = "cuda"
+    # Text encoding (<50 ms on CPU per query) does not need a GPU. The GPU is
+    # reserved for the celery-worker image-encoding path. Override via
+    # MEMORYLANE_CLIP_DEVICE=cuda if a GPU node is available.
+    clip_device: str = "cpu"
 
     model_config = {"env_prefix": "MEMORYLANE_"}
 
