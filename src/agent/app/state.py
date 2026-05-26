@@ -1,10 +1,9 @@
 import uuid
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import Any, TypedDict
 
-if TYPE_CHECKING:
-    from langchain_core.messages import BaseMessage
+from langchain_core.messages import BaseMessage
 
-    from app.models import SearchResult
+from app.models import SearchResult
 
 # Exported so tests can assert the TypedDict's required keys haven't drifted.
 REQUIRED_STATE_KEYS: frozenset[str] = frozenset(
@@ -27,8 +26,8 @@ class AgentState(TypedDict):
     tenant_id: uuid.UUID
     user_id: uuid.UUID
     limit: int
-    messages: list["BaseMessage"]
+    messages: list[BaseMessage]
     tool_results: list[dict[str, Any]]
     iteration: int
-    final_results: list["SearchResult"]
+    final_results: list[SearchResult]
     reasoning: list[str]

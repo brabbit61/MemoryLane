@@ -222,3 +222,5 @@ __marimo__/
 
 # Binaries
 *.0_x5
+
+*.terraform*
