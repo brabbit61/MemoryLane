@@ -11,13 +11,13 @@ def _key(token: str) -> str:
     return f"{_KEY_PREFIX}{token}"
 
 
-async def create_state_token(redis: aioredis.Redis) -> str:  # type: ignore[type-arg]
+async def create_state_token(redis: aioredis.Redis) -> str:
     token = secrets.token_urlsafe(32)
     await redis.set(_key(token), "1", ex=settings.oauth_state_ttl)
     return token
 
 
-async def consume_state_token(redis: aioredis.Redis, token: str) -> bool:  # type: ignore[type-arg]
+async def consume_state_token(redis: aioredis.Redis, token: str) -> bool:
     """Atomically get-and-delete the state token. Returns True if it existed."""
     result = await redis.getdel(_key(token))
     return result is not None

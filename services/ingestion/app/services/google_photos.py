@@ -31,7 +31,7 @@ def _to_int(value: object) -> int | None:
     if value is None:
         return None
     try:
-        return int(value)
+        return int(value)  # type: ignore[call-overload, no-any-return]
     except (TypeError, ValueError):
         return None
 
@@ -166,7 +166,7 @@ def _build_credentials(creds_dict: dict[str, str | None]) -> Credentials:
     if creds_dict.get("scope"):
         scopes = str(creds_dict["scope"]).split()
 
-    return Credentials(
+    return Credentials(  # type: ignore[no-untyped-call]
         token=creds_dict.get("access_token"),
         refresh_token=creds_dict.get("refresh_token"),
         token_uri="https://oauth2.googleapis.com/token",  # noqa: S106
@@ -181,7 +181,7 @@ def _refreshed_access_token(creds_dict: dict[str, str | None]) -> str:
     """Build Credentials, refresh if expired/expiring, and return the current access token."""
     creds = _build_credentials(creds_dict)
     if not creds.valid:
-        creds.refresh(google.auth.transport.requests.Request())
+        creds.refresh(google.auth.transport.requests.Request())  # type: ignore[no-untyped-call]
     return str(creds.token)
 
 
@@ -241,7 +241,7 @@ async def list_picked_items(
             )
             resp.raise_for_status()
             data: dict[str, object] = resp.json()
-            items = list(data.get("mediaItems") or [])
+            items = list(data.get("mediaItems") or [])  # type: ignore[call-overload]
             if items:
                 yield items
             next_token = data.get("nextPageToken")

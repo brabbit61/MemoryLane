@@ -14,7 +14,7 @@ def _client():  # type: ignore[no-untyped-def]
 
 
 async def ensure_bucket_exists() -> None:
-    async with _client() as s3:
+    async with _client() as s3:  # type: ignore[no-untyped-call]
         try:
             await s3.head_bucket(Bucket=settings.s3_bucket_photos)
         except Exception:
@@ -33,7 +33,7 @@ async def upload_photo(
     content_type: str = "application/octet-stream",
 ) -> str:
     key = photo_s3_key(tenant_id, user_id, photo_id)
-    async with _client() as s3:
+    async with _client() as s3:  # type: ignore[no-untyped-call]
         await s3.put_object(
             Bucket=settings.s3_bucket_photos,
             Key=key,

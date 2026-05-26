@@ -1,5 +1,5 @@
 import uuid
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
     from langchain_core.messages import BaseMessage
@@ -28,7 +28,7 @@ class AgentState(TypedDict):
     user_id: uuid.UUID
     limit: int
     messages: list["BaseMessage"]
-    tool_results: list[dict]
+    tool_results: list[dict[str, Any]]
     iteration: int
     final_results: list["SearchResult"]
     reasoning: list[str]
