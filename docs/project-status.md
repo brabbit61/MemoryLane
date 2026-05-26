@@ -21,28 +21,18 @@
 
 ### Phase 0 — Foundations
 
-- **Monorepo structure**: `services/` (microservices), `infra/` (Terraform + DB), `docs/` (ADRs), `.github/` (CI)
+- **Monorepo structure**: `src/` (microservices + UI), `infra/` (Terraform + DB), `docs/` (ADRs), `.github/` (CI)
 - **docker-compose**: Postgres 16 + pgvector, Redis 7, MinIO (S3-compatible), api-gateway, ingestion-svc, celery-worker with NVIDIA GPU passthrough
-- **API Gateway** (`services/api-gateway`): FastAPI hello-world with health + readiness endpoints, async SQLAlchemy, pydantic-settings
+- **API Gateway** (`src/api-gateway`): FastAPI hello-world with health + readiness endpoints, async SQLAlchemy, pydantic-settings
 - **Database schema**: `tenants`, `users`, `photos`, `photo_embeddings` (HNSW index on 768-dim vector), `oauth_tokens`; Row-Level Security enabled
-- **Terraform modules** — written and validated, not yet applied to AWS:
-
-  | Module | Resources |
-  |--------|-----------|
-  | `vpc` | VPC, 3 public + 3 private subnets, IGW, NAT, route tables |
-  | `eks` | EKS cluster, CPU node group (t3.medium ×2), GPU node group (g5.xlarge, scales to 0) |
-  | `rds` | RDS Postgres 16 (db.t3.medium), Secrets Manager password |
-  | `s3` | Photos bucket + model artifacts bucket, lifecycle rules |
-  | `cognito` | User pool + web client |
-  | `ecr` | One ECR repository per service (api-gateway, ingestion, workers) |
-
+- **Terraform** — `module.s3` deployed (photos + model-artifacts buckets). VPC, EKS, RDS, Cognito, ECR modules will be added in Phase 2.
 - **CI (GitHub Actions)**:
   - PR: ruff lint + format, mypy, bandit security scan, pytest, docker build
-  - Main: full test suite (api-gateway + ingestion); build-and-push to ECR gated until Terraform is applied
+  - Main: full test suite (workers excluded — requires GPU)
 
 ### Phase 1 — Google Photos Ingestion + CLIP Enrichment
 
-**Ingestion service** (`services/ingestion`, port 8001):
+**Ingestion service** (`src/ingestion`, port 8001):
 - OAuth 2.0 with PKCE using the Photos Picker API (`photospicker.mediaitems.readonly`)
 - Tokens stored in Postgres with refresh support
 - Endpoints:
@@ -51,7 +41,7 @@
   - `POST /sync/google/{user_id}/start` — creates a Picker session, returns `picker_uri`
   - `POST /sync/google/{user_id}/ingest/{session_id}` — downloads selected photos, uploads to S3, dispatches enrichment tasks
 
-**Enrichment worker** (`services/workers`):
+**Enrichment worker** (`src/workers`):
 - Celery consumer on `enrichment` queue, `prefetch_multiplier=1` (one task at a time per GPU worker)
 - Generates 256px + 1024px thumbnails (Pillow LANCZOS)
 - Extracts EXIF metadata (DateTimeOriginal, GPS, dimensions, camera make/model)
@@ -73,7 +63,6 @@ AWS S3 buckets were provisioned via Terraform (`module.s3`). A new `search-svc` 
 | `taken_at` is null | Picker API download URL doesn't include EXIF creation time; requires a separate call to `sessions.mediaItems.list` for `creationTime` | Phase 2 |
 | Search not wired through api-gateway | `GET /search` is served directly from search-svc (port 8002); the api-gateway proxy layer is not yet added | Phase 3 |
 | No face clustering | Phase 2 | Phase 2 |
-| ECR repo for search-svc | `infra/terraform/modules/ecr` creates repos for api-gateway, ingestion, workers — search needs a 4th | Phase 2 |
 
 ---
 
@@ -92,56 +81,28 @@ AWS S3 buckets were provisioned via Terraform (`module.s3`). A new `search-svc` 
 
 ---
 
-## Terraform AWS Deployment (Phase 2+)
+## Terraform AWS Deployment
 
-### Prerequisites
+### Currently Deployed
 
-AWS CLI configured with a user/role that has `AdministratorAccess`.
-
-### Bootstrap (one-time — before the main `terraform init`)
-
-The main stack stores state in `s3://memorylane-terraform-state` and uses S3-native locking (`use_lockfile = true`), so only the state bucket itself needs to exist up front. A small Terraform config in [infra/terraform/bootstrap](../infra/terraform/bootstrap) creates it (local state, gitignored):
-
-```bash
-cd infra/terraform/bootstrap
-terraform init
-terraform apply        # creates s3://memorylane-terraform-state
-```
-
-The bucket has `prevent_destroy = true` to guard against accidental teardown.
-
-> **Note for AWS IAM Identity Center users:** the Terraform AWS provider doesn't yet read the v2.30+ `aws login` cache at `~/.aws/login/cache/`. If `terraform plan` errors with `No valid credential sources found`, export the active session into env vars first:
-> ```bash
-> eval "$(aws configure export-credentials --format env)"
-> ```
-
-### Apply
-
-**Phase 1b only needs the S3 module.** Apply S3 by itself — `terraform apply` without `-target` will also spin up an EKS cluster (~$73/mo control plane) and a NAT gateway (~$33/mo), which are out of scope until Phase 2:
+Only `module.s3` is applied:
 
 ```bash
 cd infra/terraform
 terraform init
-terraform apply -target=module.s3 -var-file=environments/dev/terraform.tfvars
+terraform apply -var-file=environments/dev/terraform.tfvars
 ```
 
 This provisions `memorylane-dev-photos` and `memorylane-dev-model-artifacts`. To point the running services at the real buckets, set the four `MEMORYLANE_AWS_*` / `MEMORYLANE_S3_*` vars in `.env` (see [.env.example](../.env.example)) and restart the stack. Leaving `MEMORYLANE_S3_ENDPOINT_URL` unset keeps photos in the local MinIO container.
 
-> **STS-session caveat:** with `aws login` (IAM Identity Center), exported credentials are only valid for the session window (typically a few hours). A full-stack apply that runs through EKS creation can outlast them, leaving the state save to fail with `ExpiredToken`. Either re-`eval "$(aws configure export-credentials --format env)"` before any long apply, or use longer-lived credentials (an IAM user / role) for big runs.
+> **Note for AWS IAM Identity Center users:** export credentials before running Terraform:
+> ```bash
+> eval "$(aws configure export-credentials --format env)"
+> ```
 
-### Phase 2+ — full environment build-out
+### Phase 2+ — VPC, EKS, RDS, Cognito, ECR
 
-When you're ready for EKS, RDS, Cognito, ECR, and the VPC:
-
-```bash
-terraform plan -var-file=environments/dev/terraform.tfvars -out=tfplan.dev
-terraform apply tfplan.dev
-```
-
-### Enable ECR push in CI (after apply)
-
-1. Remove `if: false` from the `build-and-push` job in `.github/workflows/on-main.yml`
-2. Add `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` to **GitHub → Settings → Secrets → Actions**
+These modules will be added when cloud deployment begins.
 
 ---
 
@@ -149,7 +110,7 @@ terraform apply tfplan.dev
 
 ### Why tests run per-service
 
-All services share `app` as their top-level package name. Running `pytest services/` in one process causes `sys.modules` to cache the first service's `app`, making subsequent services import the wrong code. Each `python -m pytest services/<svc>/tests` call starts a fresh Python interpreter, eliminating the collision.
+All services share `app` as their top-level package name. Running `pytest src/` in one process causes `sys.modules` to cache the first service's `app`, making subsequent services import the wrong code. Each `python -m pytest src/<svc>/tests` call starts a fresh Python interpreter, eliminating the collision.
 
 Each service directory also has a root-level `conftest.py` (not inside `tests/`) that inserts the service root at `sys.path[0]` as a fallback for environments where multiple services are installed in the same venv.
 
@@ -157,5 +118,5 @@ Each service directory also has a root-level `conftest.py` (not inside `tests/`)
 
 The workers service requires `torch` (~2 GB CUDA wheels) and a physical GPU. These tests are excluded from CI and run locally only:
 ```bash
-cd services/workers && pip install -e ".[dev]" && pytest tests -v
+cd src/workers && pip install -e ".[dev]" && pytest tests -v
 ```

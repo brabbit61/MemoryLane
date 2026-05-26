@@ -44,10 +44,10 @@ jobs:
         run: |
           pip install --upgrade pip
           pip install -r requirements-dev.txt
-          pip install -e "services/api-gateway[dev]"
-          pip install -e "services/ingestion[dev]"
-          pip install -e "services/search[dev]"
-          pip install -e "services/agent[dev]"
+          pip install -e "src/api-gateway[dev]"
+          pip install -e "src/ingestion[dev]"
+          pip install -e "src/search[dev]"
+          pip install -e "src/agent[dev]"
           # workers omitted — requires torch + GPU (tested locally only)
 
       - name: Lint
@@ -55,69 +55,33 @@ jobs:
 
       - name: Mypy type check
         run: |
-          mypy services/api-gateway/app --ignore-missing-imports
-          mypy services/ingestion/app --ignore-missing-imports
-          mypy services/search/app --ignore-missing-imports
-          mypy services/agent/app --ignore-missing-imports
+          mypy src/api-gateway/app --ignore-missing-imports
+          mypy src/ingestion/app --ignore-missing-imports
+          mypy src/search/app --ignore-missing-imports
+          mypy src/agent/app --ignore-missing-imports
 
       - name: Test api-gateway
         env:
           MEMORYLANE_ENVIRONMENT: test
           MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane
           MEMORYLANE_REDIS_URL: redis://localhost:6379/0
-        run: python -m pytest services/api-gateway/tests -v --tb=short
+        run: python -m pytest src/api-gateway/tests -v --tb=short
 
       - name: Test ingestion
         env:
           MEMORYLANE_ENVIRONMENT: test
           MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane
           MEMORYLANE_REDIS_URL: redis://localhost:6379/0
-        run: python -m pytest services/ingestion/tests -v --tb=short
+        run: python -m pytest src/ingestion/tests -v --tb=short
 
       - name: Test search
         env:
           MEMORYLANE_ENVIRONMENT: test
           MEMORYLANE_DATABASE_URL: postgresql+asyncpg://memorylane:memorylane@localhost:5432/memorylane
-        run: python -m pytest services/search/tests -v --tb=short
+        run: python -m pytest src/search/tests -v --tb=short
 
       - name: Test agent
         env:
           MEMORYLANE_ENVIRONMENT: test
           MEMORYLANE_ANTHROPIC_API_KEY: sk-ant-placeholder-for-ci
-        run: python -m pytest services/agent/tests -v --tb=short
-
-  build-and-push:
-    name: Build & Push to ECR
-    runs-on: ubuntu-latest
-    needs: [test]
-    # TODO: uncomment when ECR is provisioned
-    if: false
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Login to ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build and push api-gateway
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/memorylane-api-gateway:$IMAGE_TAG services/api-gateway
-          docker push $ECR_REGISTRY/memorylane-api-gateway:$IMAGE_TAG
-
-      - name: Build and push agent-svc
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          docker build -t $ECR_REGISTRY/memorylane-agent-svc:$IMAGE_TAG services/agent
-          docker push $ECR_REGISTRY/memorylane-agent-svc:$IMAGE_TAG
+        run: python -m pytest src/agent/tests -v --tb=short

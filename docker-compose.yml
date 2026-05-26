@@ -47,7 +47,7 @@ services:
 
   api-gateway:
     build:
-      context: ./services/api-gateway
+      context: ./src/api-gateway
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
@@ -66,7 +66,7 @@ services:
 
   ingestion-svc:
     build:
-      context: ./services/ingestion
+      context: ./src/ingestion
       dockerfile: Dockerfile
     ports:
       - "8001:8001"
@@ -98,7 +98,7 @@ services:
 
   search-svc:
     build:
-      context: ./services/search
+      context: ./src/search
       dockerfile: Dockerfile
     ports:
       - "8002:8002"
@@ -127,7 +127,7 @@ services:
 
   agent-svc:
     build:
-      context: ./services/agent
+      context: ./src/agent
       dockerfile: Dockerfile
     ports:
       - "8003:8003"
@@ -145,7 +145,7 @@ services:
 
   celery-worker:
     build:
-      context: ./services/workers
+      context: ./src/workers
       dockerfile: Dockerfile
     environment:
       MEMORYLANE_DATABASE_URL: postgresql+psycopg2://memorylane:memorylane@postgres:5432/memorylane

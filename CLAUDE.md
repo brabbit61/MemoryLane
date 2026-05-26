@@ -2,17 +2,22 @@
 
 ## Project Overview
 
-MemoryLane is an agentic AI photo library organizer — a multi-tenant SaaS built with FastAPI microservices, multi-agent AI (LangGraph + AutoGen), and deployed on AWS (EKS/Terraform).
+MemoryLane is an agentic AI photo library organizer — a multi-tenant SaaS built with FastAPI microservices, multi-agent AI (LangGraph + AutoGen), and deployed on AWS (S3/Terraform).
 
 ## Repository Structure
 
 ```
-services/          # FastAPI microservices (api-gateway, ingestion, search, agent, workers)
-infra/             # Terraform modules + Helm charts + DB init scripts
+src/               # FastAPI microservices + UI placeholder
+  api-gateway/     #   REST entrypoint, health/readiness endpoints
+  ingestion/       #   Google Photos OAuth + sync
+  search/          #   CLIP text-to-image search, pgvector ANN
+  agent/           #   LangGraph conversational agent
+  workers/         #   Celery + CLIP GPU enrichment
+  ui/              #   Next.js frontend (Phase 3)
+infra/
+  terraform/       #   AWS S3 (deployed); VPC/EKS/RDS/ECR added in Phase 2+
+  db/              #   Postgres init script (pgvector schema, RLS)
 docs/              # Architecture docs + ADRs
-ml/                # DPO training pipeline + eval datasets
-evals/             # Evaluation framework
-ui/                # Next.js frontend
 .github/workflows/ # CI/CD pipelines
 ```
 
@@ -40,7 +45,7 @@ docker compose logs -f        # Watch logs
 
 Each service follows this structure:
 ```
-services/<name>/
+src/<name>/
   app/
     __init__.py
     main.py       # FastAPI app
@@ -57,17 +62,17 @@ services/<name>/
 
 - **LLM Provider:** Anthropic Claude only (Haiku for simple, Sonnet for reasoning)
 - **Vector DB:** pgvector on Postgres (benchmarking Pinecone in Phase 4)
-- **No fine-tuning in v1** — compensated by deeper agentic patterns
-- **DPO:** Real preferences only, ~300 pairs, album cover selection task
 - **Multi-tenant:** tenant_id mandatory on all queries, enforced at ORM + RLS level
 
 ## Running Tests
 
 ```bash
-cd services/api-gateway && pip install -e ".[dev]" && pytest tests/ -v
+cd src/api-gateway && pip install -e ".[dev]" && pytest tests/ -v
 ```
+
+Each service gets its own Python process to avoid `sys.modules` collisions (all services share the `app` package name).
 
 ## CI
 
 - PR: ruff lint + format check, mypy, bandit, pytest, docker build
-- Main: full test suite, build + push to ECR, deploy to staging
+- Main: full test suite (workers excluded — requires GPU)
