@@ -119,9 +119,7 @@ async def tool_executor_node(state: AgentState) -> dict[str, Any]:
                 content = json.dumps({"error": str(exc)})
                 status = "error"
 
-        new_messages.append(
-            ToolMessage(content=content, tool_call_id=tool_call_id, status=status)
-        )
+        new_messages.append(ToolMessage(content=content, tool_call_id=tool_call_id, status=status))
 
     return {
         "messages": messages + new_messages,
