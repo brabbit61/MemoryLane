@@ -43,8 +43,15 @@ async def test_search_photos_omits_unused_filters() -> None:
     await search_photos.ainvoke({"query": "beach", "tenant_id": "t1", "user_id": "u1"})
 
     params = dict(route.calls[0].request.url.params)
-    for key in ("start_date", "end_date", "camera_make", "min_latitude", "max_latitude",
-                "min_longitude", "max_longitude"):
+    for key in (
+        "start_date",
+        "end_date",
+        "camera_make",
+        "min_latitude",
+        "max_latitude",
+        "min_longitude",
+        "max_longitude",
+    ):
         assert key not in params
 
 
