@@ -4,28 +4,21 @@ from langchain_anthropic import ChatAnthropic
 from langchain_core.runnables import Runnable
 
 from app.config import settings
-from app.tools import (
-    combined_filter_search,
-    date_filter_search,
-    metadata_filter_search,
-    semantic_search,
-)
+from app.tools import search_photos
 
 SYSTEM_PROMPT = """You are MemoryLane's search agent. Given a user's natural-language \
-query about their photo library, decide which tool to use:
+query about their photo library, call search_photos to find relevant results.
 
-- semantic_search: default for any visual concept ("sunset", "dog at the beach")
-- date_filter_search: when the query mentions time only ("last summer", "in 2023")
-- metadata_filter_search: when the query mentions camera or location only
-- combined_filter_search: when the query mentions BOTH time AND camera/location \
-("Paris trip last summer on my Canon") — always prefer this over calling \
-date_filter_search and metadata_filter_search separately
+Supply filters only when the query mentions them:
+- Time ("last summer", "in 2023"): set start_date and end_date
+- Camera brand ("my Canon"): set camera_make
+- Geographic area: set min/max latitude and longitude
 
-You may invoke multiple tools across iterations if results are insufficient.
+You may invoke the tool multiple times across iterations if results are insufficient.
 After reviewing results, decide whether to stop or refine.
 """
 
-_TOOLS = [semantic_search, date_filter_search, metadata_filter_search, combined_filter_search]
+_TOOLS = [search_photos]
 
 
 def get_llm() -> Runnable[Any, Any]:

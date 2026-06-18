@@ -80,7 +80,7 @@ def _base_state(**overrides: Any) -> AgentState:
 
 
 def _make_ai_with_tool_call(
-    tool_name: str = "semantic_search",
+    tool_name: str = "search_photos",
     call_id: str = "tc1",
 ) -> AIMessage:
     return AIMessage(
@@ -200,11 +200,11 @@ async def test_planner_node_appends_human_message_on_retry() -> None:
 
 
 async def test_planner_node_records_tool_names_in_reasoning() -> None:
-    ai_response = _make_ai_with_tool_call("date_filter_search", "tc2")
+    ai_response = _make_ai_with_tool_call("search_photos", "tc2")
     with patch("app.graph.get_llm", return_value=_mock_llm(ai_response)):
         result = await planner_node(_base_state(iteration=0))
 
-    assert "date_filter_search" in result["reasoning"][0]
+    assert "search_photos" in result["reasoning"][0]
 
 
 # ---------------------------------------------------------------------------
@@ -213,12 +213,12 @@ async def test_planner_node_records_tool_names_in_reasoning() -> None:
 
 
 async def test_tool_executor_invokes_correct_tool_and_accumulates_results() -> None:
-    ai_msg = _make_ai_with_tool_call("semantic_search", "tc1")
+    ai_msg = _make_ai_with_tool_call("search_photos", "tc1")
     state = _base_state(
         messages=[SystemMessage(content="sys"), HumanMessage(content="q"), ai_msg],
     )
 
-    with patch("app.graph._TOOL_MAP", {"semantic_search": _mock_tool([FAKE_RAW_A])}):
+    with patch("app.graph._TOOL_MAP", {"search_photos": _mock_tool([FAKE_RAW_A])}):
         result = await tool_executor_node(state)
 
     assert result["tool_results"] == [FAKE_RAW_A]
@@ -246,12 +246,12 @@ async def test_tool_executor_handles_tool_exception_gracefully() -> None:
     failing_tool = MagicMock()
     failing_tool.ainvoke = AsyncMock(side_effect=RuntimeError("Search service timed out"))
 
-    ai_msg = _make_ai_with_tool_call("semantic_search", "tc_err")
+    ai_msg = _make_ai_with_tool_call("search_photos", "tc_err")
     state = _base_state(
         messages=[SystemMessage(content="sys"), HumanMessage(content="q"), ai_msg],
     )
 
-    with patch("app.graph._TOOL_MAP", {"semantic_search": failing_tool}):
+    with patch("app.graph._TOOL_MAP", {"search_photos": failing_tool}):
         result = await tool_executor_node(state)  # must not raise
 
     assert result["tool_results"] == []
@@ -260,13 +260,13 @@ async def test_tool_executor_handles_tool_exception_gracefully() -> None:
 
 
 async def test_tool_executor_preserves_prior_tool_results() -> None:
-    ai_msg = _make_ai_with_tool_call("semantic_search", "tc2")
+    ai_msg = _make_ai_with_tool_call("search_photos", "tc2")
     state = _base_state(
         messages=[SystemMessage(content="sys"), HumanMessage(content="q"), ai_msg],
         tool_results=[FAKE_RAW_A],  # already something from a prior call
     )
 
-    with patch("app.graph._TOOL_MAP", {"semantic_search": _mock_tool([FAKE_RAW_B])}):
+    with patch("app.graph._TOOL_MAP", {"search_photos": _mock_tool([FAKE_RAW_B])}):
         result = await tool_executor_node(state)
 
     assert FAKE_RAW_A in result["tool_results"]
@@ -348,12 +348,12 @@ def test_build_graph_compiles_without_error() -> None:
 
 async def test_graph_terminates_at_iteration_cap() -> None:
     """Integration test: graph must stop at _MAX_ITERATIONS even with no results."""
-    ai_response = _make_ai_with_tool_call("semantic_search", "tc_iter")
+    ai_response = _make_ai_with_tool_call("search_photos", "tc_iter")
 
     # LLM always asks for a tool call; tool always returns empty list → no final_results
     with (
         patch("app.graph.get_llm", return_value=_mock_llm(ai_response)),
-        patch("app.graph._TOOL_MAP", {"semantic_search": _mock_tool([])}),
+        patch("app.graph._TOOL_MAP", {"search_photos": _mock_tool([])}),
     ):
         graph = build_graph()
         config = {"configurable": {"thread_id": "test-iter-cap"}}

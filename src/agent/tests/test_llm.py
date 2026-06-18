@@ -1,7 +1,7 @@
 """Tests for the LLM module.
 
 Verifies the module imports cleanly, the model is configured correctly,
-and all four tools are bound — without making real API calls.
+and the search tool is bound — without making real API calls.
 """
 
 from unittest.mock import patch
@@ -29,27 +29,13 @@ def test_get_llm_has_bound_tools() -> None:
     # RunnableBinding wraps the model when tools are bound; it exposes kwargs
     assert hasattr(llm, "kwargs"), "Expected a RunnableBinding with .kwargs after bind_tools"
     bound_tool_names = {t["name"] for t in llm.kwargs.get("tools", [])}
-    assert "semantic_search" in bound_tool_names
-    assert "date_filter_search" in bound_tool_names
-    assert "metadata_filter_search" in bound_tool_names
-    assert "combined_filter_search" in bound_tool_names
+    assert "search_photos" in bound_tool_names
 
 
-def test_tools_list_contains_all_four() -> None:
+def test_tools_list_contains_search_photos() -> None:
     tool_names = {t.name for t in _TOOLS}
-    assert tool_names == {
-        "semantic_search",
-        "date_filter_search",
-        "metadata_filter_search",
-        "combined_filter_search",
-    }
+    assert tool_names == {"search_photos"}
 
 
-def test_system_prompt_mentions_all_tools() -> None:
-    for name in (
-        "semantic_search",
-        "date_filter_search",
-        "metadata_filter_search",
-        "combined_filter_search",
-    ):
-        assert name in SYSTEM_PROMPT, f"SYSTEM_PROMPT missing routing hint for {name}"
+def test_system_prompt_mentions_search_photos() -> None:
+    assert "search_photos" in SYSTEM_PROMPT
