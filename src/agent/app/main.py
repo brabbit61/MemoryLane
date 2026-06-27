@@ -12,7 +12,7 @@ if settings.langsmith_api_key:
     os.environ["LANGCHAIN_API_KEY"] = settings.langsmith_api_key
     os.environ["LANGCHAIN_PROJECT"] = settings.langsmith_project
 
-from app.routers import agent  # noqa: E402
+from app.routers import agent
 
 app = FastAPI(
     title=settings.app_name,
