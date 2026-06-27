@@ -113,7 +113,7 @@ services:
       HF_HOME: /app/model_cache
     healthcheck:
       # CLIP ViT-L/14 loads lazily on first request; start_period gives it time.
-      test: ["CMD-SHELL", "curl -sf http://localhost:8002/health || exit 1"]
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8002/health')\""]
       interval: 10s
       timeout: 5s
       retries: 5
