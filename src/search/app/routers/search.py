@@ -31,7 +31,8 @@ async def search(
     db: DbSession = ...,  # type: ignore[assignment]
 ) -> list[SearchResult]:
     # Scope the DB session to this tenant so RLS policies enforce isolation.
-    await db.execute(text("SET LOCAL app.current_tenant_id = :tid"), {"tid": str(tenant_id)})
+    # SET LOCAL does not support bind params in Postgres — UUID is safe to inline.
+    await db.execute(text(f"SET LOCAL app.current_tenant_id = '{tenant_id}'"))
 
     embedding = encode_text(q)
     vec_str = "[" + ",".join(map(str, embedding)) + "]"
@@ -74,7 +75,7 @@ async def search(
         " 1 - (pe.embedding <=> CAST(:vec AS vector)) AS score"
         " FROM photo_embeddings pe"
         " JOIN photos p ON p.id = pe.photo_id"
-        f"WHERE {where_clause}"
+        f" WHERE {where_clause}"
         " ORDER BY pe.embedding <=> CAST(:vec AS vector)"
         " LIMIT :lim"
     )
