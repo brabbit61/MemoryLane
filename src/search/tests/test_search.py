@@ -244,6 +244,28 @@ async def test_search_with_combined_date_and_camera_filters(client: AsyncClient)
 
 
 @pytest.mark.asyncio
+async def test_photo_count_returns_count_for_tenant_and_user(client: AsyncClient) -> None:
+    mock_db = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one.return_value = 7
+    mock_db.execute = AsyncMock(return_value=mock_result)
+
+    async def _override() -> AsyncGenerator[AsyncMock, None]:
+        yield mock_db
+
+    app.dependency_overrides[get_db] = _override
+    try:
+        resp = await client.get(f"/photos/count?tenant_id={TENANT_ID}&user_id={USER_ID}")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert resp.status_code == 200
+    assert resp.json() == {"count": 7}
+    params = mock_db.execute.call_args.args[1]
+    assert params == {"tid": str(TENANT_ID), "uid": str(USER_ID)}
+
+
+@pytest.mark.asyncio
 async def test_search_no_filters_omits_extra_conditions(client: AsyncClient) -> None:
     mock_db = _make_mock_db_with_rows([])
 

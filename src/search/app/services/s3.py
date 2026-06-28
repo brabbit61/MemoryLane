@@ -1,4 +1,5 @@
 import boto3
+from botocore.client import Config
 
 from app.config import settings
 
@@ -10,6 +11,10 @@ def presign_photo_url(s3_key: str, expires_in: int = 3600) -> str:
         aws_access_key_id=settings.aws_access_key_id,
         aws_secret_access_key=settings.aws_secret_access_key,
         region_name=settings.aws_region,
+        # Buckets with SSE-KMS reject SigV2 presigned URLs ("require AWS
+        # Signature Version 4"). Force SigV4 so GETs against KMS-encrypted
+        # objects authenticate.
+        config=Config(signature_version="s3v4"),
     )
     return client.generate_presigned_url(  # type: ignore[no-any-return]
         "get_object",
