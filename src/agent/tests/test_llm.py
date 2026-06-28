@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from langchain_core.runnables import Runnable
 
-from app.llm import TOOLS, SYSTEM_PROMPT, get_llm
+from app.llm import SYSTEM_PROMPT, TOOLS, get_llm
 
 
 def test_get_llm_returns_chat_model() -> None:
