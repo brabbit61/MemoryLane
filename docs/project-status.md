@@ -1,135 +1,107 @@
-# MemoryLane — Project Status & Roadmap
-
-## Phase Overview
-
-| Phase | Description | Status |
-|-------|-------------|--------|
-| **Phase 0** | Foundations: monorepo, docker-compose, Terraform skeleton, API gateway, CI | ✅ Complete |
-| **Phase 1** | Google Photos ingestion + CLIP GPU enrichment + pgvector writes | ✅ Complete |
-| **Phase 1b** | S3 Terraform applied; search-svc scaffold, CLIP text encoding, GET /search endpoint | ✅ Complete |
-| **Phase 3** | LangGraph Search Agent (A4) + Streamlit UI | ✅ Partial |
-| **Phase 4** | Fix taken_at, wire search through api-gateway, DPO data collection | 🚧 Active |
-| **Phase 5** | Plan-and-Execute (D1), Critic/Reflection (D2), Shared Memory (D5), LLM-as-Judge eval (D6) | 🚧 Active |
-| **Phase 7** | Grafana dashboards, Guardrails, LangSmith fully wired | 🚧 Active |
-| **Phase 8** | Blog post, Demo video | 🚧 Active |
-
-### Deferred Phases
-
-| Phase | Description | Reason |
-|-------|-------------|--------|
-| Phase 2 | Face detection, event clustering, duplicate detection | Not required for core agentic demo |
-| Phase 6 | DPO reranker training pipeline | Depends on Album Generation (A3) which is deferred |
-
----
+# MemoryLane — Project Status
 
 ## What's Been Built
 
-### Phase 0 — Foundations
+### Infrastructure & DevOps
 
 - **Monorepo structure**: `src/` (microservices + UI), `infra/` (Terraform + DB), `docs/` (ADRs), `.github/` (CI)
 - **docker-compose**: Postgres 16 + pgvector, Redis 7, MinIO (S3-compatible), api-gateway, ingestion-svc, celery-worker with NVIDIA GPU passthrough
-- **API Gateway** (`src/api-gateway`): FastAPI hello-world with health + readiness endpoints, async SQLAlchemy, pydantic-settings
-- **Database schema**: `tenants`, `users`, `photos`, `photo_embeddings` (HNSW index on 768-dim vector), `oauth_tokens`; Row-Level Security enabled
-- **Terraform** — `module.s3` deployed (photos + model-artifacts buckets). VPC, EKS, RDS, Cognito, ECR modules deferred.
+- **AWS S3**: `memorylane-dev-photos` and `memorylane-dev-model-artifacts` buckets provisioned via Terraform (`module.s3`)
 - **CI (GitHub Actions)**:
-  - PR: ruff lint + format, mypy, bandit security scan, pytest, docker build
+  - PR: ruff lint + format check, mypy, bandit security scan, pytest, docker build
   - Main: full test suite (workers excluded — requires GPU)
 
-### Phase 1 — Google Photos Ingestion + CLIP Enrichment
+### Data Layer
 
-**Ingestion service** (`src/ingestion`, port 8001):
+- **Postgres schema**: `tenants`, `users`, `photos`, `photo_embeddings` (HNSW index on 768-dim vector), `oauth_tokens`
+- **Row-Level Security** enabled on all tables; `tenant_id` mandatory on every query
+- **Redis**: app cache on DB 0, Celery task queue on DB 1
+- **MinIO**: S3-compatible local object store for photos and thumbnails
+
+### Google Photos Integration
+
 - OAuth 2.0 with PKCE using the Photos Picker API (`photospicker.mediaitems.readonly`)
 - Tokens stored in Postgres with refresh support
-- Endpoints:
+- Endpoints in `ingestion-svc` (port 8001):
   - `GET /oauth/google/init` — generates Picker OAuth URL, stores PKCE verifier in Redis (TTL 600s)
   - `GET /oauth/google/callback` — exchanges code, upserts `oauth_tokens`
   - `POST /sync/google/{user_id}/start` — creates a Picker session, returns `picker_uri`
   - `POST /sync/google/{user_id}/ingest/{session_id}` — downloads selected photos, uploads to S3, dispatches enrichment tasks
 
-**Enrichment worker** (`src/workers`):
-- Celery consumer on `enrichment` queue, `prefetch_multiplier=1` (one task at a time per GPU worker)
+### Photo Enrichment Pipeline
+
+Celery worker (`src/workers`) consumes from the `enrichment` queue (`prefetch_multiplier=1` — one task at a time per GPU worker):
+
 - Generates 256px + 1024px thumbnails (Pillow LANCZOS)
 - Extracts EXIF metadata (DateTimeOriginal, GPS, dimensions, camera make/model)
-- Runs CLIP ViT-L/14 inference on NVIDIA GPU — ~50 ms/image vs ~2–5 s on CPU
+- Runs CLIP ViT-L/14 inference on NVIDIA GPU (~50 ms/image) — falls back to CPU (~2–5 s)
 - Writes 768-dim L2-normalized embedding to `photo_embeddings` via pgvector
 
 **End-to-end verified locally**: 7 photos ingested → MinIO S3 → CLIP GPU enrichment → pgvector; self-similarity = 1.0000
 
-### Phase 1b — S3 Terraform + Search Service Foundation
+### Semantic Search
 
-AWS S3 buckets were provisioned via Terraform (`module.s3`). A new `search-svc` (port 8002) was built end-to-end: GPU-capable FastAPI scaffold with async SQLAlchemy, a CLIP ViT-L/14 text encoding module (`encode_text(query) -> list[float]`, 768-dim), and a `GET /search` endpoint that encodes the query, runs a pgvector cosine ANN query over `photo_embeddings`, and returns ranked results with 1-hour pre-signed S3 URLs. Pre-signed URL generation uses sync boto3 and switches between MinIO and real AWS S3 via a single env var. The service is covered by unit tests (mocked CLIP model — no GPU in CI) and wired into docker-compose and the CI matrix.
+`search-svc` (port 8002):
 
-### Phase 3 (partial) — LangGraph Search Agent + Streamlit UI
+- CLIP ViT-L/14 text encoding (`encode_text(query) -> list[float]`, 768-dim)
+- `GET /search` — encodes query, runs pgvector cosine ANN over `photo_embeddings`, returns ranked results with 1-hour pre-signed S3 URLs
+- Switches between MinIO and real AWS S3 via a single `MEMORYLANE_S3_ENDPOINT_URL` env var
+- Unit tests mock the CLIP model — no GPU required in CI
 
-**Agent service** (`src/agent`, port 8003):
-- LangGraph StateGraph: planner → tool_executor → reflector, max 3 iterations
-- Tools: semantic_search, date_filter_search, metadata_filter_search (all hit search-svc over HTTP)
+### Conversational Search Agent
+
+`agent-svc` (port 8003):
+
+- LangGraph `StateGraph`: planner → tool_executor → reflector, max 3 iterations
+- Tools: `search_photos` hitting `search-svc` over HTTP, with optional date, camera, and location filters
 - Claude Sonnet 4.6 for planner reasoning
-- MemorySaver checkpointer (will graduate to PostgresSaver when D4 is undeferred)
-- LangSmith tracing wired (project: memorylane-agent)
+- MemorySaver checkpointer
+- LangSmith tracing wired (project: `memorylane-agent`)
 
-**UI** (`src/ui/`, port 8501):
-- Streamlit single-page app
-- Sidebar user_id input (dev-mode auth — no Cognito yet)
+### Streamlit UI
+
+`ui` (port 8501):
+
+- Single-page app with sidebar user_id input (dev-mode auth — no Cognito yet)
 - 3-column results grid with pre-signed S3 thumbnails
-- "Agent reasoning" expander showing the planner's tool calls
+- "Agent reasoning" expander showing the planner's tool calls and iteration trace
 
 ---
 
-## Active Roadmap
+## In Progress
 
-All active tickets are tracked on GitHub. Milestones map to phases.
-
-### Phase 4 — Carry-overs
-
-| # | Ticket | Description |
-|---|--------|-------------|
-| [#45](https://github.com/brabbit61/MemoryLane/issues/45) | Fix `taken_at` null field | Call `sessions.mediaItems.list` during ingestion to populate photo creation timestamps |
-| [#46](https://github.com/brabbit61/MemoryLane/issues/46) | Wire search through API-gateway | Add reverse-proxy route in api-gateway so all clients use port 8000 |
-| [#47](https://github.com/brabbit61/MemoryLane/issues/47) | DPO data collection | `dpo_pairs` table + preference endpoint + Streamlit "Better / Worse" buttons |
-
-### Phase 5 — Deep Agent Capabilities
-
-| # | Ticket | Depends on |
-|---|--------|------------|
-| [#48](https://github.com/brabbit61/MemoryLane/issues/48) | D1 — Plan-and-Execute agent graph | — (replaces current ReAct loop) |
-| [#49](https://github.com/brabbit61/MemoryLane/issues/49) | D2 — Critic and reflection node | #48 |
-| [#50](https://github.com/brabbit61/MemoryLane/issues/50) | D5 — Cross-agent shared memory via Redis | #48 |
-| [#51](https://github.com/brabbit61/MemoryLane/issues/51) | D6 — LLM-as-Judge eval and chaos suite | #48, #49 |
-
-### Phase 7 — Observability & Guardrails
-
-| # | Ticket | Depends on |
-|---|--------|------------|
-| [#52](https://github.com/brabbit61/MemoryLane/issues/52) | Grafana dashboards and Prometheus metrics | — |
-| [#53](https://github.com/brabbit61/MemoryLane/issues/53) | Guardrails — injection defense + cost runaway | #48 |
-| [#54](https://github.com/brabbit61/MemoryLane/issues/54) | LangSmith fully wired | #51 |
-
-### Phase 8 — Demo & Portfolio
-
-| # | Ticket | Depends on |
-|---|--------|------------|
-| [#55](https://github.com/brabbit61/MemoryLane/issues/55) | Blog post | All Phase 5 + Phase 7 tickets complete |
-| [#56](https://github.com/brabbit61/MemoryLane/issues/56) | Demo video | All Phase 5 + Phase 7 tickets complete |
+| Ticket | Description |
+|--------|-------------|
+| [#45](https://github.com/brabbit61/MemoryLane/issues/45) | Fix `taken_at` null — call `sessions.mediaItems.list` during ingestion to populate photo timestamps |
+| [#46](https://github.com/brabbit61/MemoryLane/issues/46) | Wire search through api-gateway so all clients use a single entry point (port 8000) |
+| [#47](https://github.com/brabbit61/MemoryLane/issues/47) | DPO preference collection — `dpo_pairs` table, preference endpoint, Streamlit "Better / Worse" buttons |
+| [#48](https://github.com/brabbit61/MemoryLane/issues/48) | Plan-and-Execute agent — restructure search agent from a ReAct loop to a multi-step planning graph |
+| [#49](https://github.com/brabbit61/MemoryLane/issues/49) | Critic and reflection node — agent evaluates its own results and revises the query if quality is low |
+| [#50](https://github.com/brabbit61/MemoryLane/issues/50) | Cross-agent shared memory — Redis-backed per-user memory persisted across sessions |
+| [#51](https://github.com/brabbit61/MemoryLane/issues/51) | LLM-as-Judge eval and chaos suite — 50 LangSmith scenarios judged by Claude Haiku; injected failure tests |
+| [#52](https://github.com/brabbit61/MemoryLane/issues/52) | Grafana dashboards and Prometheus metrics — live ops, cost, agent performance, eval score panels |
+| [#53](https://github.com/brabbit61/MemoryLane/issues/53) | Guardrails — prompt injection sanitization and per-tenant daily cost cap |
+| [#54](https://github.com/brabbit61/MemoryLane/issues/54) | LangSmith fully wired — prompt versioning, A/B experiments, per-tenant cost attribution |
+| [#55](https://github.com/brabbit61/MemoryLane/issues/55) | Blog post — long-form technical writeup + adapted LinkedIn version |
+| [#56](https://github.com/brabbit61/MemoryLane/issues/56) | Demo video — 3-minute self-contained walkthrough for GitHub README and LinkedIn |
 
 ---
 
-## Deferred Backlog
+## Deferred
 
-These items have GitHub tickets under the "Backlog — Deferred" milestone. Pick up when prior phases are complete or priorities change.
-
-| # | Ticket | Key dependency |
-|---|--------|----------------|
-| [#57](https://github.com/brabbit61/MemoryLane/issues/57) | BLIP-2 caption generation in workers | — |
-| [#58](https://github.com/brabbit61/MemoryLane/issues/58) | Album Generation Graph (A3) | #57, #48 |
-| [#59](https://github.com/brabbit61/MemoryLane/issues/59) | Agent hardening — D3 + D4 + D7 | #48, #57 |
-| [#60](https://github.com/brabbit61/MemoryLane/issues/60) | Phase 6a — Cover Picker UI + DPO data collection | #58 |
-| [#61](https://github.com/brabbit61/MemoryLane/issues/61) | Phase 6b — DPO training pipeline + model artefact | #60 (~300 pairs collected) |
-| [#62](https://github.com/brabbit61/MemoryLane/issues/62) | Phase 6c — DPO reranker deployment + eval | #61, #58 |
-| [#63](https://github.com/brabbit61/MemoryLane/issues/63) | Adversarial eval suite | #53, #59, #51 |
-| [#64](https://github.com/brabbit61/MemoryLane/issues/64) | Eval regression gates in CI | #48, #51 |
-
-Items dropped from scope entirely: Phase 2 (face detection, event clustering, duplicate detection), AutoGen A5 (conversational multi-turn agent), live demo URL + cloud deployment, demo library curation, multi-tenancy security audit.
+| Ticket | Description | Blocked on |
+|--------|-------------|------------|
+| [#57](https://github.com/brabbit61/MemoryLane/issues/57) | BLIP-2 caption generation — natural-language captions per photo stored in the DB | — |
+| [#58](https://github.com/brabbit61/MemoryLane/issues/58) | Album Generation (A3) — LangGraph supervisor graph with curator, theme detector, photo selector, cover designer nodes | #57 |
+| [#59](https://github.com/brabbit61/MemoryLane/issues/59) | Agent hardening — structured error recovery (D3), HITL interrupts + PostgresSaver (D4), tool poisoning defense (D7) | #48, #57 |
+| [#60](https://github.com/brabbit61/MemoryLane/issues/60) | Cover Picker UI — drag-and-rank interface for collecting album cover preference pairs | #58 |
+| [#61](https://github.com/brabbit61/MemoryLane/issues/61) | DPO training pipeline — export preference pairs, train cross-encoder reranker with TRL, version artefact in S3 | #60 (~300 pairs) |
+| [#62](https://github.com/brabbit61/MemoryLane/issues/62) | DPO reranker deployment — integrate trained model into album photo selector; E6 pairwise eval | #61, #58 |
+| [#63](https://github.com/brabbit61/MemoryLane/issues/63) | Adversarial eval suite — 20+ hostile input scenarios covering cross-tenant attempts, jailbreaks, resource exhaustion | #53, #59 |
+| [#64](https://github.com/brabbit61/MemoryLane/issues/64) | CI smoke checks — deterministic agent gate on every PR (mocked LLM, 5 canonical queries, no API spend) | #48 |
+| — | Face detection, event clustering, duplicate detection | Not required for core agentic demo |
+| — | AutoGen A5 — conversational multi-turn search agent | Not required for core agentic demo |
+| — | Live demo URL — full cloud deployment (EKS, RDS, ECR via Terraform) | Out of scope for this stage |
 
 ---
 
@@ -137,41 +109,45 @@ Items dropped from scope entirely: Phase 2 (face detection, event clustering, du
 
 | Decision | Choice | ADR |
 |----------|--------|-----|
-| Agent framework | LangGraph + AutoGen; CrewAI evaluated and replaced | [ADR-003](adr/003-langgraph-over-crewai.md) |
-| Vector DB | pgvector on Postgres for v1 | [ADR-002](adr/002-vector-db-pgvector.md) |
+| Agent framework | LangGraph for stateful agents; AutoGen reserved for conversational multi-turn (deferred); CrewAI evaluated and replaced | [ADR-003](adr/003-langgraph-over-crewai.md) |
+| Vector DB | pgvector on Postgres | [ADR-002](adr/002-vector-db-pgvector.md) |
 | CLIP model | ViT-L/14 via open_clip, 768-dim | — |
 | Google Photos API | Picker API — Library API deprecated March 2025 | — |
 | OAuth security | PKCE (code_verifier stored in Redis, TTL 600s) | — |
 | Task queue | Celery + Redis DB 1 (separate from app cache on DB 0) | — |
-| LLM provider | Anthropic Claude only (Haiku for simple, Sonnet for reasoning) | — |
+| LLM provider | Anthropic Claude only (Haiku for simple tasks, Sonnet for reasoning) | — |
 | Multi-tenancy | `tenant_id` on every row + Row-Level Security at DB level | — |
 | Guardrails | Custom sanitization for injection defense; no external guardrails library | — |
 | Shared memory | Redis-backed per-user flat namespace (`mem:{user_id}:`) | — |
 
 ---
 
-## Terraform AWS Deployment
-
-### Currently Deployed
-
-Only `module.s3` is applied:
+## Running Locally
 
 ```bash
-cd infra/terraform
-terraform init
-terraform apply -var-file=environments/dev/terraform.tfvars
+docker compose up -d          # Start Postgres, Redis, MinIO, api-gateway
+docker compose logs -f        # Watch logs
 ```
 
-This provisions `memorylane-dev-photos` and `memorylane-dev-model-artifacts`. To point the running services at the real buckets, set the four `MEMORYLANE_AWS_*` / `MEMORYLANE_S3_*` vars in `.env` (see [.env.example](../.env.example)) and restart the stack. Leaving `MEMORYLANE_S3_ENDPOINT_URL` unset keeps photos in the local MinIO container.
+| Service | Port |
+|---------|------|
+| API Gateway | 8000 |
+| Ingestion | 8001 |
+| Search | 8002 |
+| Agent | 8003 |
+| Streamlit UI | 8501 |
+| Postgres (pgvector) | 5432 |
+| Redis | 6379 |
+| MinIO (S3) | 9000 (console: 9001) |
 
-> **Note for AWS IAM Identity Center users:** export credentials before running Terraform:
+### AWS S3 (optional)
+
+Set `MEMORYLANE_AWS_*` / `MEMORYLANE_S3_*` vars in `.env` (see [.env.example](../.env.example)) and restart the stack. Leaving `MEMORYLANE_S3_ENDPOINT_URL` unset keeps photos in the local MinIO container.
+
+> **AWS IAM Identity Center users:** export credentials before running Terraform:
 > ```bash
 > eval "$(aws configure export-credentials --format env)"
 > ```
-
-### Cloud Deployment (Deferred)
-
-VPC, EKS, RDS, Cognito, and ECR Terraform modules are deferred. They will be added if a live demo URL becomes a priority.
 
 ---
 
@@ -181,11 +157,12 @@ VPC, EKS, RDS, Cognito, and ECR Terraform modules are deferred. They will be add
 
 All services share `app` as their top-level package name. Running `pytest src/` in one process causes `sys.modules` to cache the first service's `app`, making subsequent services import the wrong code. Each `python -m pytest src/<svc>/tests` call starts a fresh Python interpreter, eliminating the collision.
 
-Each service directory also has a root-level `conftest.py` (not inside `tests/`) that inserts the service root at `sys.path[0]` as a fallback for environments where multiple services are installed in the same venv.
+Each service directory has a root-level `conftest.py` that inserts the service root at `sys.path[0]` as a fallback for environments where multiple services are installed in the same venv.
 
-### Workers tests in CI
+### Workers tests
 
-The workers service requires `torch` (~2 GB CUDA wheels) and a physical GPU. These tests are excluded from CI and run locally only:
+The workers service requires `torch` (~2 GB CUDA wheels) and a physical GPU. Run locally only:
+
 ```bash
 cd src/workers && pip install -e ".[dev]" && pytest tests -v
 ```
