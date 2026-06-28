@@ -22,7 +22,9 @@ from app.services.google_photos import (
 )
 from app.services.s3 import upload_photo
 
-_celery = Celery("ingestion", broker=settings.celery_broker_url, backend=settings.celery_backend_url)
+_celery = Celery(
+    "ingestion", broker=settings.celery_broker_url, backend=settings.celery_backend_url
+)
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +173,9 @@ async def _ingest_picked_items(db: AsyncSession, user_id: uuid.UUID, session_id:
             await db.execute(update(Photo).where(Photo.id == photo.id).values(s3_key=s3_key))
             await db.commit()
 
-            _celery.send_task("workers.tasks.enrich_photo", args=[str(photo.id)], queue="enrichment")
+            _celery.send_task(
+                "workers.tasks.enrich_photo", args=[str(photo.id)], queue="enrichment"
+            )
 
     await db.execute(
         update(OAuthToken)
