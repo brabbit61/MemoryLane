@@ -7,13 +7,18 @@
 | **Phase 0** | Foundations: monorepo, docker-compose, Terraform skeleton, API gateway, CI | ✅ Complete |
 | **Phase 1** | Google Photos ingestion + CLIP GPU enrichment + pgvector writes | ✅ Complete |
 | **Phase 1b** | S3 Terraform applied; search-svc scaffold, CLIP text encoding, GET /search endpoint | ✅ Complete |
-| Phase 2 | Face detection, event clustering, duplicate detection | Planned |
-| Phase 3 (partial) | LangGraph Search Agent + Streamlit UI (A4); AutoGen A5 deferred | ✅ Partial |
-| Phase 4 | BLIP-2 captions, LangGraph Album Generation Graph (supervisor), DPO data collection | Planned |
-| Phase 5 | Deep agent capabilities: plan-and-execute, reflection, HITL, chaos evals | Planned |
-| Phase 6 | DPO reranker training pipeline | Planned |
-| Phase 7 | Hardening: Grafana, guardrails, adversarial eval, multi-tenancy audit | Planned |
-| Phase 8 | Demo library, live URL, blog post, demo video | Planned |
+| **Phase 3** | LangGraph Search Agent (A4) + Streamlit UI | ✅ Partial |
+| **Phase 4** | Fix taken_at, wire search through api-gateway, DPO data collection | 🚧 Active |
+| **Phase 5** | Plan-and-Execute (D1), Critic/Reflection (D2), Shared Memory (D5), LLM-as-Judge eval (D6) | 🚧 Active |
+| **Phase 7** | Grafana dashboards, Guardrails, LangSmith fully wired | 🚧 Active |
+| **Phase 8** | Blog post, Demo video | 🚧 Active |
+
+### Deferred Phases
+
+| Phase | Description | Reason |
+|-------|-------------|--------|
+| Phase 2 | Face detection, event clustering, duplicate detection | Not required for core agentic demo |
+| Phase 6 | DPO reranker training pipeline | Depends on Album Generation (A3) which is deferred |
 
 ---
 
@@ -25,7 +30,7 @@
 - **docker-compose**: Postgres 16 + pgvector, Redis 7, MinIO (S3-compatible), api-gateway, ingestion-svc, celery-worker with NVIDIA GPU passthrough
 - **API Gateway** (`src/api-gateway`): FastAPI hello-world with health + readiness endpoints, async SQLAlchemy, pydantic-settings
 - **Database schema**: `tenants`, `users`, `photos`, `photo_embeddings` (HNSW index on 768-dim vector), `oauth_tokens`; Row-Level Security enabled
-- **Terraform** — `module.s3` deployed (photos + model-artifacts buckets). VPC, EKS, RDS, Cognito, ECR modules will be added in Phase 2.
+- **Terraform** — `module.s3` deployed (photos + model-artifacts buckets). VPC, EKS, RDS, Cognito, ECR modules deferred.
 - **CI (GitHub Actions)**:
   - PR: ruff lint + format, mypy, bandit security scan, pytest, docker build
   - Main: full test suite (workers excluded — requires GPU)
@@ -60,7 +65,7 @@ AWS S3 buckets were provisioned via Terraform (`module.s3`). A new `search-svc` 
 - LangGraph StateGraph: planner → tool_executor → reflector, max 3 iterations
 - Tools: semantic_search, date_filter_search, metadata_filter_search (all hit search-svc over HTTP)
 - Claude Sonnet 4.6 for planner reasoning
-- MemorySaver checkpointer (will graduate to PostgresSaver for HITL)
+- MemorySaver checkpointer (will graduate to PostgresSaver when D4 is undeferred)
 - LangSmith tracing wired (project: memorylane-agent)
 
 **UI** (`src/ui/`, port 8501):
@@ -71,14 +76,60 @@ AWS S3 buckets were provisioned via Terraform (`module.s3`). A new `search-svc` 
 
 ---
 
-## Known Gaps
+## Active Roadmap
 
-| Gap | Detail | Planned fix |
-|-----|--------|-------------|
-| `taken_at` is null | Picker API download URL doesn't include EXIF creation time; requires a separate call to `sessions.mediaItems.list` for `creationTime` | Phase 2 |
-| Search not wired through api-gateway | `GET /search` is served directly from search-svc (port 8002); the api-gateway proxy layer is not yet added | Phase 3 |
-| No face clustering | Phase 2 | Phase 2 |
-| No multi-turn refinement | UI is one-shot only — AutoGen A5 deferred | next phase |
+All active tickets are tracked on GitHub. Milestones map to phases.
+
+### Phase 4 — Carry-overs
+
+| # | Ticket | Description |
+|---|--------|-------------|
+| [#45](https://github.com/brabbit61/MemoryLane/issues/45) | Fix `taken_at` null field | Call `sessions.mediaItems.list` during ingestion to populate photo creation timestamps |
+| [#46](https://github.com/brabbit61/MemoryLane/issues/46) | Wire search through API-gateway | Add reverse-proxy route in api-gateway so all clients use port 8000 |
+| [#47](https://github.com/brabbit61/MemoryLane/issues/47) | DPO data collection | `dpo_pairs` table + preference endpoint + Streamlit "Better / Worse" buttons |
+
+### Phase 5 — Deep Agent Capabilities
+
+| # | Ticket | Depends on |
+|---|--------|------------|
+| [#48](https://github.com/brabbit61/MemoryLane/issues/48) | D1 — Plan-and-Execute agent graph | — (replaces current ReAct loop) |
+| [#49](https://github.com/brabbit61/MemoryLane/issues/49) | D2 — Critic and reflection node | #48 |
+| [#50](https://github.com/brabbit61/MemoryLane/issues/50) | D5 — Cross-agent shared memory via Redis | #48 |
+| [#51](https://github.com/brabbit61/MemoryLane/issues/51) | D6 — LLM-as-Judge eval and chaos suite | #48, #49 |
+
+### Phase 7 — Observability & Guardrails
+
+| # | Ticket | Depends on |
+|---|--------|------------|
+| [#52](https://github.com/brabbit61/MemoryLane/issues/52) | Grafana dashboards and Prometheus metrics | — |
+| [#53](https://github.com/brabbit61/MemoryLane/issues/53) | Guardrails — injection defense + cost runaway | #48 |
+| [#54](https://github.com/brabbit61/MemoryLane/issues/54) | LangSmith fully wired | #51 |
+
+### Phase 8 — Demo & Portfolio
+
+| # | Ticket | Depends on |
+|---|--------|------------|
+| [#55](https://github.com/brabbit61/MemoryLane/issues/55) | Blog post | All Phase 5 + Phase 7 tickets complete |
+| [#56](https://github.com/brabbit61/MemoryLane/issues/56) | Demo video | All Phase 5 + Phase 7 tickets complete |
+
+---
+
+## Deferred Backlog
+
+These items have GitHub tickets under the "Backlog — Deferred" milestone. Pick up when prior phases are complete or priorities change.
+
+| # | Ticket | Key dependency |
+|---|--------|----------------|
+| [#57](https://github.com/brabbit61/MemoryLane/issues/57) | BLIP-2 caption generation in workers | — |
+| [#58](https://github.com/brabbit61/MemoryLane/issues/58) | Album Generation Graph (A3) | #57, #48 |
+| [#59](https://github.com/brabbit61/MemoryLane/issues/59) | Agent hardening — D3 + D4 + D7 | #48, #57 |
+| [#60](https://github.com/brabbit61/MemoryLane/issues/60) | Phase 6a — Cover Picker UI + DPO data collection | #58 |
+| [#61](https://github.com/brabbit61/MemoryLane/issues/61) | Phase 6b — DPO training pipeline + model artefact | #60 (~300 pairs collected) |
+| [#62](https://github.com/brabbit61/MemoryLane/issues/62) | Phase 6c — DPO reranker deployment + eval | #61, #58 |
+| [#63](https://github.com/brabbit61/MemoryLane/issues/63) | Adversarial eval suite | #53, #59, #51 |
+| [#64](https://github.com/brabbit61/MemoryLane/issues/64) | Eval regression gates in CI | #48, #51 |
+
+Items dropped from scope entirely: Phase 2 (face detection, event clustering, duplicate detection), AutoGen A5 (conversational multi-turn agent), live demo URL + cloud deployment, demo library curation, multi-tenancy security audit.
 
 ---
 
@@ -87,13 +138,15 @@ AWS S3 buckets were provisioned via Terraform (`module.s3`). A new `search-svc` 
 | Decision | Choice | ADR |
 |----------|--------|-----|
 | Agent framework | LangGraph + AutoGen; CrewAI evaluated and replaced | [ADR-003](adr/003-langgraph-over-crewai.md) |
-| Vector DB | pgvector on Postgres for v1; benchmark Pinecone in Phase 4 | [ADR-002](adr/002-vector-db-pgvector.md) |
+| Vector DB | pgvector on Postgres for v1 | [ADR-002](adr/002-vector-db-pgvector.md) |
 | CLIP model | ViT-L/14 via open_clip, 768-dim | — |
 | Google Photos API | Picker API — Library API deprecated March 2025 | — |
 | OAuth security | PKCE (code_verifier stored in Redis, TTL 600s) | — |
 | Task queue | Celery + Redis DB 1 (separate from app cache on DB 0) | — |
 | LLM provider | Anthropic Claude only (Haiku for simple, Sonnet for reasoning) | — |
 | Multi-tenancy | `tenant_id` on every row + Row-Level Security at DB level | — |
+| Guardrails | Custom sanitization for injection defense; no external guardrails library | — |
+| Shared memory | Redis-backed per-user flat namespace (`mem:{user_id}:`) | — |
 
 ---
 
@@ -116,9 +169,9 @@ This provisions `memorylane-dev-photos` and `memorylane-dev-model-artifacts`. To
 > eval "$(aws configure export-credentials --format env)"
 > ```
 
-### Phase 2+ — VPC, EKS, RDS, Cognito, ECR
+### Cloud Deployment (Deferred)
 
-These modules will be added when cloud deployment begins.
+VPC, EKS, RDS, Cognito, and ECR Terraform modules are deferred. They will be added if a live demo URL becomes a priority.
 
 ---
 
