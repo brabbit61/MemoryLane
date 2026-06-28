@@ -4,3 +4,5 @@ mypy>=1.13.0
 pytest>=8.0
 pytest-asyncio>=0.24.0
 bandit>=1.8.0
+streamlit>=1.36
+requests>=2.31

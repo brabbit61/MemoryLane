@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from langchain_core.runnables import Runnable
 
-from app.llm import _TOOLS, SYSTEM_PROMPT, get_llm
+from app.llm import SYSTEM_PROMPT, TOOLS, get_llm
 
 
 def test_get_llm_returns_chat_model() -> None:
@@ -33,7 +33,7 @@ def test_get_llm_has_bound_tools() -> None:
 
 
 def test_tools_list_contains_search_photos() -> None:
-    tool_names = {t.name for t in _TOOLS}
+    tool_names = {t.name for t in TOOLS}
     assert tool_names == {"search_photos"}
 
 

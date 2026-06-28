@@ -5,21 +5,6 @@ from langchain_core.messages import BaseMessage
 
 from app.models import SearchResult
 
-# Exported so tests can assert the TypedDict's required keys haven't drifted.
-REQUIRED_STATE_KEYS: frozenset[str] = frozenset(
-    {
-        "query",
-        "tenant_id",
-        "user_id",
-        "limit",
-        "messages",
-        "tool_results",
-        "iteration",
-        "final_results",
-        "reasoning",
-    }
-)
-
 
 class AgentState(TypedDict):
     query: str

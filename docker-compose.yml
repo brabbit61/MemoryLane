@@ -143,6 +143,23 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  ui:
+    build:
+      context: ./src/ui
+      dockerfile: Dockerfile
+    ports:
+      - "8501:8501"
+    environment:
+      MEMORYLANE_USE_HTTP: "1"
+      MEMORYLANE_AGENT_URL: http://agent-svc:8003
+      MEMORYLANE_SEARCH_URL: http://search-svc:8002
+      MEMORYLANE_INGESTION_URL: http://ingestion-svc:8001
+    depends_on:
+      - agent-svc
+      - ingestion-svc
+      - search-svc
+    restart: unless-stopped
+
   celery-worker:
     build:
       context: ./src/workers

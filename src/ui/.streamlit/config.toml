@@ -1,0 +1,12 @@
+# MemoryLane theme — mirrors the design mockup.
+[theme]
+base = "light"
+primaryColor = "#E8A838"          # warm amber accent (buttons, slider, progress)
+backgroundColor = "#FAFAF8"       # soft off-white
+secondaryBackgroundColor = "#F3F1EC"  # sidebar / muted panels
+textColor = "#1C1C1E"             # charcoal
+font = "sans serif"
+
+[server]
+# The Picker flow opens google in a new tab and polls; keep the session alive.
+runOnSave = true

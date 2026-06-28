@@ -13,7 +13,7 @@ src/               # FastAPI microservices + UI placeholder
   search/          #   CLIP text-to-image search, pgvector ANN
   agent/           #   LangGraph conversational agent
   workers/         #   Celery + CLIP GPU enrichment
-  ui/              #   Next.js frontend (Phase 3)
+  ui/              #   Streamlit UI (search + Google Photos ingest)
 infra/
   terraform/       #   AWS S3 (deployed); VPC/EKS/RDS/ECR added in Phase 2+
   db/              #   Postgres init script (pgvector schema, RLS)

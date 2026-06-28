@@ -126,3 +126,6 @@ jobs:
 
       - name: Build agent-svc image
         run: docker build -t memorylane-agent-svc:${{ github.sha }} src/agent
+
+      - name: Build ui image
+        run: docker build -t memorylane-ui:${{ github.sha }} src/ui

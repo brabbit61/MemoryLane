@@ -10,3 +10,7 @@ class SearchResult(BaseModel):
     taken_at: datetime | None
     score: float
     url: str
+
+
+class PhotoCount(BaseModel):
+    count: int
