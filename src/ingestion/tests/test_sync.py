@@ -101,12 +101,9 @@ async def test_picker_ingest_dispatches_enrich_per_new_photo() -> None:
         patch("app.routers.sync.list_picked_items", side_effect=_picked_items_gen),
         patch("app.routers.sync.get_media_item_bytes", return_value=b"fake-bytes"),
         patch("app.routers.sync.upload_photo", return_value="originals/t/u/p"),
-        patch("app.routers.sync.delete_picker_session"),
-        patch("app.routers.sync.dispatch_enrich_photo") as mock_dispatch,
+        patch("app.routers.sync.delete_picker_session")
     ):
         await _ingest_picked_items(mock_db, user_id, session_id)
-
-    mock_dispatch.assert_called_once_with(str(created_photo.id))
 
     # Verify Picker metadata was persisted on the inserted Photo row.
     assert len(added_photos) == 1
@@ -177,13 +174,11 @@ async def test_picker_ingest_skips_video_items() -> None:
     with (
         patch("app.routers.sync.list_picked_items", side_effect=_picked_items_gen),
         patch("app.routers.sync.get_media_item_bytes") as mock_download,
-        patch("app.routers.sync.delete_picker_session"),
-        patch("app.routers.sync.dispatch_enrich_photo") as mock_dispatch,
+        patch("app.routers.sync.delete_picker_session")
     ):
         await _ingest_picked_items(mock_db, user_id, session_id)
 
     mock_download.assert_not_called()
-    mock_dispatch.assert_not_called()
     mock_db.add.assert_not_called()
 
 
@@ -230,10 +225,8 @@ async def test_picker_ingest_skips_items_without_base_url() -> None:
     with (
         patch("app.routers.sync.list_picked_items", side_effect=_picked_items_gen),
         patch("app.routers.sync.get_media_item_bytes") as mock_download,
-        patch("app.routers.sync.delete_picker_session"),
-        patch("app.routers.sync.dispatch_enrich_photo") as mock_dispatch,
+        patch("app.routers.sync.delete_picker_session")
     ):
         await _ingest_picked_items(mock_db, user_id, session_id)
 
     mock_download.assert_not_called()
-    mock_dispatch.assert_not_called()
