@@ -8,7 +8,7 @@
 | **Phase 1** | Google Photos ingestion + CLIP GPU enrichment + pgvector writes | ✅ Complete |
 | **Phase 1b** | S3 Terraform applied; search-svc scaffold, CLIP text encoding, GET /search endpoint | ✅ Complete |
 | Phase 2 | Face detection, event clustering, duplicate detection | Planned |
-| Phase 3 | LangGraph Search Agent, AutoGen Conversational Agent, web UI | 🚧 In Progress |
+| Phase 3 (partial) | LangGraph Search Agent + Streamlit UI (A4); AutoGen A5 deferred | ✅ Partial |
 | Phase 4 | BLIP-2 captions, LangGraph Album Generation Graph (supervisor), DPO data collection | Planned |
 | Phase 5 | Deep agent capabilities: plan-and-execute, reflection, HITL, chaos evals | Planned |
 | Phase 6 | DPO reranker training pipeline | Planned |
@@ -54,6 +54,21 @@
 
 AWS S3 buckets were provisioned via Terraform (`module.s3`). A new `search-svc` (port 8002) was built end-to-end: GPU-capable FastAPI scaffold with async SQLAlchemy, a CLIP ViT-L/14 text encoding module (`encode_text(query) -> list[float]`, 768-dim), and a `GET /search` endpoint that encodes the query, runs a pgvector cosine ANN query over `photo_embeddings`, and returns ranked results with 1-hour pre-signed S3 URLs. Pre-signed URL generation uses sync boto3 and switches between MinIO and real AWS S3 via a single env var. The service is covered by unit tests (mocked CLIP model — no GPU in CI) and wired into docker-compose and the CI matrix.
 
+### Phase 3 (partial) — LangGraph Search Agent + Streamlit UI
+
+**Agent service** (`src/agent`, port 8003):
+- LangGraph StateGraph: planner → tool_executor → reflector, max 3 iterations
+- Tools: semantic_search, date_filter_search, metadata_filter_search (all hit search-svc over HTTP)
+- Claude Sonnet 4.6 for planner reasoning
+- MemorySaver checkpointer (will graduate to PostgresSaver for HITL)
+- LangSmith tracing wired (project: memorylane-agent)
+
+**UI** (`src/ui/`, port 8501):
+- Streamlit single-page app
+- Sidebar user_id input (dev-mode auth — no Cognito yet)
+- 3-column results grid with pre-signed S3 thumbnails
+- "Agent reasoning" expander showing the planner's tool calls
+
 ---
 
 ## Known Gaps
@@ -63,6 +78,7 @@ AWS S3 buckets were provisioned via Terraform (`module.s3`). A new `search-svc` 
 | `taken_at` is null | Picker API download URL doesn't include EXIF creation time; requires a separate call to `sessions.mediaItems.list` for `creationTime` | Phase 2 |
 | Search not wired through api-gateway | `GET /search` is served directly from search-svc (port 8002); the api-gateway proxy layer is not yet added | Phase 3 |
 | No face clustering | Phase 2 | Phase 2 |
+| No multi-turn refinement | UI is one-shot only — AutoGen A5 deferred | next phase |
 
 ---
 
