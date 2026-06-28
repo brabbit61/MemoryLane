@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.clip_text import encode_text
 from app.db import get_db
-from app.models import SearchResult
+from app.models import PhotoCount, SearchResult
 from app.services.s3 import presign_photo_url
 
 router = APIRouter(tags=["search"])
@@ -93,3 +93,21 @@ async def search(
             )
         )
     return results
+
+
+@router.get("/photos/count", response_model=PhotoCount)
+async def photo_count(
+    tenant_id: uuid.UUID,
+    user_id: uuid.UUID,
+    db: DbSession = ...,  # type: ignore[assignment]
+) -> PhotoCount:
+    """Number of searchable (embedded) photos for this user — drives the UI's library total."""
+    await db.execute(text(f"SET LOCAL app.current_tenant_id = '{tenant_id}'"))
+    row = await db.execute(
+        text(
+            "SELECT count(*) AS n FROM photo_embeddings pe"
+            " WHERE pe.tenant_id = :tid AND pe.user_id = :uid"
+        ),
+        {"tid": str(tenant_id), "uid": str(user_id)},
+    )
+    return PhotoCount(count=int(row.scalar_one()))
