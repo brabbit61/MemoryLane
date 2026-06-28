@@ -16,12 +16,13 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 
-from app.llm import _TOOLS, SYSTEM_PROMPT, get_llm
+from app.llm import SYSTEM_PROMPT, get_llm
 from app.models import SearchResult
 from app.state import AgentState
+from app.tools import TOOLS
 
-# O(1) tool dispatch — built once at import time from the same list as llm.py
-_TOOL_MAP: dict[str, Any] = {t.name: t for t in _TOOLS}
+# O(1) tool dispatch — built once at import time
+_TOOL_MAP: dict[str, Any] = {t.name: t for t in TOOLS}
 
 _MAX_ITERATIONS: int = 3
 

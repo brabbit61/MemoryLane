@@ -5,26 +5,6 @@ from langchain_core.tools import tool
 
 from app.config import settings
 
-_ParamValue = str | int | float | bool | None
-_Params = dict[str, _ParamValue]
-
-
-async def _call_search(params: _Params) -> list[dict[str, Any]]:
-    """Shared transport: strips None values, calls /search, raises on error."""
-    clean: dict[str, str | int | float | bool] = {k: v for k, v in params.items() if v is not None}
-    url = f"{settings.search_service_url}/search"
-    async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
-        try:
-            response = await client.get(url, params=clean)
-            response.raise_for_status()
-        except httpx.TimeoutException as exc:
-            raise RuntimeError(f"Search service timed out: {exc}") from exc
-        except httpx.HTTPStatusError as exc:
-            raise RuntimeError(
-                f"Search service error {exc.response.status_code}: {exc.response.text}"
-            ) from exc
-    return response.json()  # type: ignore[no-any-return]
-
 
 @tool
 async def search_photos(
@@ -49,18 +29,32 @@ async def search_photos(
 
     Omit unused filters. All supplied filters combine as AND constraints.
     """
-    return await _call_search(
-        {
-            "q": query,
-            "tenant_id": tenant_id,
-            "user_id": user_id,
-            "start_date": start_date,
-            "end_date": end_date,
-            "camera_make": camera_make,
-            "min_latitude": min_latitude,
-            "max_latitude": max_latitude,
-            "min_longitude": min_longitude,
-            "max_longitude": max_longitude,
-            "limit": limit,
-        }
-    )
+    params = {
+        "q": query,
+        "tenant_id": tenant_id,
+        "user_id": user_id,
+        "start_date": start_date,
+        "end_date": end_date,
+        "camera_make": camera_make,
+        "min_latitude": min_latitude,
+        "max_latitude": max_latitude,
+        "min_longitude": min_longitude,
+        "max_longitude": max_longitude,
+        "limit": limit,
+    }
+    clean = {k: v for k, v in params.items() if v is not None}
+    url = f"{settings.search_service_url}/search"
+    async with httpx.AsyncClient(timeout=settings.http_timeout_seconds) as client:
+        try:
+            response = await client.get(url, params=clean)
+            response.raise_for_status()
+        except httpx.TimeoutException as exc:
+            raise RuntimeError(f"Search service timed out: {exc}") from exc
+        except httpx.HTTPStatusError as exc:
+            raise RuntimeError(
+                f"Search service error {exc.response.status_code}: {exc.response.text}"
+            ) from exc
+    return response.json()  # type: ignore[no-any-return]
+
+
+TOOLS = [search_photos]

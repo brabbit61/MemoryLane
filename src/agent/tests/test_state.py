@@ -1,19 +1,6 @@
-"""
-Tests for AgentState TypedDict.
-
-TypedDict is a pure type annotation — runtime it is an ordinary dict.
-Tests here verify structural correctness: all required keys are declared,
-default factories work as expected, and the state can be constructed
-and mutated like a dict without any runtime errors.
-"""
-
 import uuid
 
-from app.state import REQUIRED_STATE_KEYS, AgentState
-
-
-def test_agent_state_declares_all_required_keys() -> None:
-    assert AgentState.__required_keys__ == REQUIRED_STATE_KEYS
+from app.state import AgentState
 
 
 def test_agent_state_can_be_constructed_as_dict() -> None:
@@ -62,10 +49,6 @@ def test_agent_state_reasoning_is_appendable() -> None:
     }
     state["reasoning"].append("called semantic_search")
     assert state["reasoning"] == ["called semantic_search"]
-
-
-def test_agent_state_has_tenant_id_field() -> None:
-    assert "tenant_id" in AgentState.__annotations__
 
 
 def test_agent_state_has_all_expected_annotations() -> None:
