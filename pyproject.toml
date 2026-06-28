@@ -31,6 +31,8 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "**/tests/**" = ["S101", "T20"]
+# The Streamlit UI is dense inline HTML/CSS-in-Python; line length there is noise.
+"src/ui/**" = ["E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["app"]
