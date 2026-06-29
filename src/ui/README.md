@@ -40,7 +40,7 @@ src/ui/
 ├── tests/test_backend.py        # mocked-HTTP wiring checks for HttpBackend
 └── memorylane/
     ├── backend.py               # ← THE SEAM: protocol + get_backend() + DemoBackend
-    ├── integration_example.py   # HttpBackend — the real wiring to the services
+    ├── integration.py   # HttpBackend — the real wiring to the services
     └── ui.py                    # CSS + render helpers (the look)
 ```
 

@@ -1,5 +1,5 @@
 """
-integration_example.py
+integration.py
 =======================
 
 Real backend that wires the Streamlit UI to the MemoryLane microservices:
