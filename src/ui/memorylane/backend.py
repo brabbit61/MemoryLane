@@ -7,7 +7,7 @@ codebase / APIs. The UI (``app.py``) only ever talks to a ``MemoryLaneBackend``;
 it never imports your internals directly. To integrate:
 
     1. Implement every method of ``MemoryLaneBackend`` against your code/API.
-       (See ``integration_example.py`` for an HTTP/Google-Photos-Picker skeleton.)
+       (See ``integration.py`` for an HTTP/Google-Photos-Picker skeleton.)
     2. Return it from ``get_backend()`` instead of ``DemoBackend()``.
 
 Everything below the ``DemoBackend`` line is throwaway demo data so the app runs
@@ -119,7 +119,7 @@ def get_backend() -> MemoryLaneBackend:
     """HttpBackend (real services) when MEMORYLANE_USE_HTTP is set, else the
     in-memory DemoBackend so the app is clickable with zero infra."""
     if os.environ.get("MEMORYLANE_USE_HTTP", "").lower() in ("1", "true", "yes"):
-        from .integration_example import HttpBackend
+        from .integration import HttpBackend
 
         return HttpBackend()
     return DemoBackend()

@@ -11,7 +11,7 @@ from unittest.mock import MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import memorylane.integration_example as ie
+import memorylane.integration as ie
 
 USER = "00000000-0000-0000-0000-000000000002"
 TENANT = "00000000-0000-0000-0000-000000000001"

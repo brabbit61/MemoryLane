@@ -1,10 +1,25 @@
 # MemoryLane
 
+[![CI](https://github.com/brabbit61/MemoryLane/actions/workflows/on-pr.yml/badge.svg)](https://github.com/brabbit61/MemoryLane/actions/workflows/on-pr.yml)
+![Python](https://img.shields.io/badge/python-3.11+-blue)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
 An agentic AI photo library organizer. Connect your Google Photos library and a multi-agent AI system handles semantic indexing, face clustering, event detection, duplicate cleanup, and conversational search — no manual tagging required.
 
 **Tech stack:** Python 3.11 · FastAPI · SQLAlchemy · Celery · CLIP ViT-L/14 · pgvector · Redis · MinIO/S3 · Docker · Terraform (AWS) · GitHub Actions
 
-See [docs/project-status.md](docs/project-status.md) for the full roadmap, architecture decisions, and implementation progress.
+See [docs/architecture.md](docs/architecture.md) for a detailed breakdown of services, data flows, and the LangGraph agent design. See [docs/project-status.md](docs/project-status.md) for the full roadmap and implementation progress.
+
+---
+
+## Features
+
+- **Semantic search** — natural-language queries over your photo library via CLIP ViT-L/14 text-to-image embeddings and pgvector HNSW ANN search
+- **Multi-turn agent** — LangGraph agent backed by Claude Sonnet that reasons across multiple search passes, applying date, location, and camera filters automatically
+- **Google Photos ingestion** — OAuth 2.0 PKCE + Picker API; no full-library access required
+- **GPU enrichment pipeline** — Celery workers run CLIP image encoding (~50 ms/image on GPU), thumbnail generation, and EXIF extraction asynchronously
+- **Multi-tenant isolation** — `tenant_id` enforced at ORM level and Postgres Row-Level Security on every query
+- **Local-first storage** — MinIO (S3-compatible) out of the box; swap to AWS S3 with one env-var change
 
 ---
 
@@ -72,8 +87,11 @@ docker compose ps   # all services should be healthy
 
 | Service | URL |
 |---------|-----|
+| **UI (Streamlit)** | **http://localhost:8501** |
 | API Gateway | http://localhost:8000 |
 | Ingestion Service | http://localhost:8001 |
+| Search Service | http://localhost:8002 |
+| Agent Service | http://localhost:8003 |
 | MinIO Console | http://localhost:9001 (`minioadmin` / `minioadmin`) |
 | Postgres | localhost:**5433** |
 | Redis | localhost:6379 |
@@ -97,25 +115,18 @@ To reset: `docker compose down -v && docker compose up -d`
 
 ---
 
-### 5. Ingest photos from Google Photos
+### 5. Use the app
 
+Open **http://localhost:8501** in your browser.
+
+1. Sign in with the dev user ID (`00000000-0000-0000-0000-000000000002`) and tenant ID (`00000000-0000-0000-0000-000000000001`)
+2. Go to the **Photos** tab → click **Connect Google Photos** → select photos in the Picker → click Done
+3. The UI polls ingestion automatically and shows live progress as photos are enriched
+4. Switch to the **Search** tab and type a natural-language query — the LangGraph agent returns semantically matched results
+
+To watch GPU enrichment in the background:
 ```bash
-# Step 1 — Start OAuth. Open the returned auth_url in your browser.
-curl "http://localhost:8001/oauth/google/init?user_id=00000000-0000-0000-0000-000000000002"
-
-# Step 2 — Create a Picker session
-curl -X POST "http://localhost:8001/sync/google/00000000-0000-0000-0000-000000000002/start"
-# Returns picker_uri — open it in your browser, select photos, click Done
-
-# Step 3 — Trigger ingestion
-curl -X POST "http://localhost:8001/sync/google/00000000-0000-0000-0000-000000000002/ingest/<session_id>"
-
-# Watch enrichment
 docker compose logs -f celery-worker
-
-# Verify
-psql -h localhost -p 5433 -U memorylane -d memorylane \
-  -c "SELECT count(*) FROM photo_embeddings;"
 ```
 
 ---
@@ -153,7 +164,7 @@ MemoryLane/
 │   ├── workers/         # Celery — CLIP enrichment, thumbnails, EXIF
 │   ├── search/          # FastAPI, port 8002 — CLIP text-to-image search
 │   ├── agent/           # FastAPI, port 8003 — LangGraph agent (Phase 3)
-│   └── ui/              # Next.js frontend (Phase 3)
+│   └── ui/              # Streamlit frontend — search + Google Photos ingest
 ├── infra/
 │   ├── db/init.sql      # Schema + seed data
 │   └── terraform/       # S3 deployed; VPC/EKS/RDS/Cognito/ECR in Phase 2
